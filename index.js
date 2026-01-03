@@ -7,7 +7,7 @@ const connectDB = require('./config/db');
 dotenv.config();
 
 // Connect to database
-connectDB(); 
+connectDB();
 
 const app = express();
 const http = require('http');
@@ -93,11 +93,20 @@ io.on('connection', (socket) => {
       io.to(lessonId).emit('receive-message', msg);
     });
 
-    socket.on('toggle-hand', () => {
+    socket.on('toggle-hand', (data) => {
       if (room && room.participants.has(socket.id)) {
         const p = room.participants.get(socket.id);
-        p.isHandRaised = !p.isHandRaised;
+        // Use provided state if available, otherwise toggle
+        const newState = (data && typeof data.isHandRaised === 'boolean') 
+          ? data.isHandRaised 
+          : !p.isHandRaised;
+        
+        p.isHandRaised = newState;
+        
+        // Emit full list update
         io.to(lessonId).emit('update-participants', Array.from(room.participants.values()));
+        // Emit specific update for optimized clients
+        io.to(lessonId).emit('hand-updated', { participantId: socket.id, isHandRaised: newState });
       }
     });
 
@@ -180,5 +189,5 @@ io.on('connection', (socket) => {
 }); 
 
 server.listen(PORT, () => {
-  console.log(`Servidor ativo com Socket.io na porta ${PORT}`);
+  console.log(`Servidor ativo na porta ${PORT}`);
 });
