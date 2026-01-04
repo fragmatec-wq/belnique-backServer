@@ -735,7 +735,7 @@ const forgotPassword = async (req, res) => {
     await user.save();
 
     const origin = req.headers.origin;
-    const baseClientUrl = process.env.CLIENT_URL || origin || 'http://localhost:5173';
+    const baseClientUrl = process.env.CLIENT_URL || origin || 'https://ateliebelnique.vercel.app';
     const resetUrl = `${baseClientUrl}/reset-password/${resetToken}`;
 
     const message = `
