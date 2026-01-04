@@ -184,7 +184,7 @@ const registerUser = async (req, res) => {
     if (user) {
       // Enviar email de verificação
       const origin = req.headers.origin;
-      const baseClientUrl = process.env.CLIENT_URL || origin || 'http://localhost:5173';
+      const baseClientUrl = process.env.CLIENT_URL || origin || 'https://ateliebelnique.vercel.app';
       const verificationUrl = `${baseClientUrl}/verify-email?token=${verificationToken}`;
       
       try {
