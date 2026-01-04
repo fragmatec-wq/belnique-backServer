@@ -184,7 +184,7 @@ const registerUser = async (req, res) => {
     if (user) {
       // Enviar email de verificação
       const origin = req.headers.origin;
-      const baseClientUrl = process.env.CLIENT_URL || origin || 'https://ateliebelnique.vercel.app';
+      const baseClientUrl = process.env.CLIENT_URL || 'https://ateliebelnique.vercel.app';
       const verificationUrl = `${baseClientUrl}/verify-email?token=${verificationToken}`;
       
       try {
@@ -735,7 +735,7 @@ const forgotPassword = async (req, res) => {
     await user.save();
 
     const origin = req.headers.origin;
-    const baseClientUrl = process.env.CLIENT_URL || origin || 'https://ateliebelnique.vercel.app';
+    const baseClientUrl = process.env.CLIENT_URL || 'https://ateliebelnique.vercel.app';
     const resetUrl = `${baseClientUrl}/reset-password/${resetToken}`;
 
     const message = `
