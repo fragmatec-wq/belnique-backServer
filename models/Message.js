@@ -3,7 +3,13 @@ const mongoose = require('mongoose');
 const messageSchema = new mongoose.Schema({
   content: {
     type: String,
-    required: true
+    trim: true
+  },
+  image: {
+    type: String
+  },
+  audio: {
+    type: String
   },
   author: {
     type: mongoose.Schema.Types.ObjectId,
@@ -25,6 +31,14 @@ const messageSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now
+  },
+  deletedBy: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  deletedForEveryone: {
+    type: Boolean,
+    default: false
   }
 });
 

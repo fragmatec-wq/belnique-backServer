@@ -2,14 +2,24 @@ const Course = require('../models/Course');
 const Review = require('../models/Review');
 const CourseSuggestion = require('../models/CourseSuggestion');
 const logActivity = require('../utils/activityLogger');
+const fs = require('fs');
+const path = require('path');
 
 
 // @desc    Get all courses
 // @route   GET /api/courses
 // @access  Public
 const getCourses = async (req, res) => {
-  const courses = await Course.find({}).populate('instructor', 'name');
-  res.json(courses);
+  try {
+    const courses = await Course.find({}, null, { maxTimeMS: 5000 })
+      .populate('instructor', 'name')
+      .lean();
+    res.json(courses || []);
+  } catch (err) {
+    console.error('getCourses error:', err.message || err);
+    // Return a fast failure so proxies don't time out (avoid 503 by long waits)
+    res.status(500).json({ message: 'Erro ao carregar cursos' });
+  }
 };
  
 // @desc    Get course by ID
@@ -149,6 +159,25 @@ const getLatestReviews = async (req, res) => {
   }
 };
 
+// @desc    Get all reviews
+// @route   GET /api/courses/reviews
+// @access  Public
+const getAllReviews = async (req, res) => {
+  try {
+    const reviews = await Review.find({})
+      .sort({ createdAt: -1 })
+      .populate({
+        path: 'user',
+        select: 'name role profileImage gender'
+      })
+      .populate('course', 'title');
+
+    res.json(reviews);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // @desc    Create new review
 // @route   POST /api/courses/:id/reviews
 // @access  Private
@@ -195,6 +224,19 @@ const deleteCourse = async (req, res) => {
   const course = await Course.findById(req.params.id);
 
   if (course) {
+    // Remove thumbnail file if present
+    try {
+      if (course.thumbnail && !course.thumbnail.startsWith('http')) {
+        const relative = course.thumbnail.replace(/^\//, '');
+        const filePath = path.join(__dirname, '..', relative);
+        if (fs.existsSync(filePath)) {
+          await fs.promises.unlink(filePath);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to delete course thumbnail:', err.message || err);
+    }
+
     // Check if user is instructor or admin (simplified for now)
     await course.deleteOne();
 
@@ -231,6 +273,10 @@ const suggestCourse = async (req, res) => {
 
     await suggestion.save();
 
+    if (req.io) {
+      req.io.emit('new-course-suggestion', suggestion);
+    }
+
     res.status(201).json({ message: 'Sugestão enviada com sucesso!', suggestion });
   } catch (error) {
     res.status(400).json({ message: 'Erro ao enviar sugestão', error: error.message });
@@ -248,5 +294,57 @@ const getCourseSuggestions = async (req, res) => {
     res.status(500).json({ message: 'Erro ao buscar sugestões', error: error.message });
   }
 };
+
+// @desc    Delete a review
+// @route   DELETE /api/courses/reviews/:id
+// @access  Private/Admin
+const deleteReview = async (req, res) => {
+  try {
+    const review = await Review.findById(req.params.id);
+    if (!review) {
+      return res.status(404).json({ message: 'Review não encontrada' });
+    }
+    await Review.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Review deletada com sucesso' });
+  } catch (error) {
+    res.status(500).json({ message: 'Erro ao deletar review', error: error.message });
+  }
+};
+
+// @desc    Delete a course suggestion
+// @route   DELETE /api/courses/suggestions/:id
+// @access  Private/Admin
+const deleteCourseSuggestion = async (req, res) => {
+  try {
+    const suggestion = await CourseSuggestion.findById(req.params.id);
+    if (!suggestion) {
+      return res.status(404).json({ message: 'Sugestão não encontrada' });
+    }
+    await CourseSuggestion.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Sugestão deletada com sucesso' });
+  } catch (error) {
+    res.status(500).json({ message: 'Erro ao deletar sugestão', error: error.message });
+  }
+};
+
+// @desc    Update a course suggestion
+// @route   PUT /api/courses/suggestions/:id
+// @access  Private/Admin
+const updateCourseSuggestion = async (req, res) => {
+  try {
+    const { status } = req.body;
+    const suggestion = await CourseSuggestion.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    );
+    if (!suggestion) {
+      return res.status(404).json({ message: 'Sugestão não encontrada' });
+    }
+    res.json(suggestion);
+  } catch (error) {
+    res.status(500).json({ message: 'Erro ao atualizar sugestão', error: error.message });
+  }
+};
  
-module.exports = { getCourses, getCourseById, createCourse, updateCourse, deleteCourse, createCourseReview, suggestCourse, getCourseSuggestions, getLatestReviews };
+module.exports = { getCourses, getCourseById, createCourse, updateCourse, deleteCourse, createCourseReview, suggestCourse, getCourseSuggestions, getLatestReviews, getAllReviews, deleteReview, deleteCourseSuggestion, updateCourseSuggestion };

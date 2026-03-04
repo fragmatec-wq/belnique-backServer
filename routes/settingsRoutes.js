@@ -4,7 +4,9 @@ const settingsController = require('../controllers/settingsController');
 const { protect, admin } = require('../middleware/authMiddleware');
 
 router.route('/')
-  .get(protect, admin, settingsController.getSettings)
+  .get(settingsController.getSettings)
   .put(protect, admin, settingsController.updateSettings);
+
+router.post('/verify-key', settingsController.verifyAdminKey);
 
 module.exports = router;

@@ -63,4 +63,9 @@ const activitySchema = new mongoose.Schema({
   }
 });
 
+// Indexes
+activitySchema.index({ user: 1, createdAt: -1 }); // Compound index for filtering by user and sorting by date
+activitySchema.index({ action: 1 });
+activitySchema.index({ createdAt: -1 });
+
 module.exports = mongoose.model('Activity', activitySchema);

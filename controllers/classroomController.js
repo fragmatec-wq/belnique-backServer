@@ -1,7 +1,10 @@
 const Classroom = require('../models/Classroom');
 const User = require('../models/User');
 const Course = require('../models/Course');
+const SystemSettings = require('../models/SystemSettings');
 const logActivity = require('../utils/activityLogger');
+const fs = require('fs');
+const path = require('path');
 
 exports.getAllClassrooms = async (req, res) => {
   try {
@@ -166,12 +169,26 @@ exports.getAvailableCoursesForEnrollment = async (req, res) => {
 
 exports.enrollStudent = async (req, res) => {
   try {
-    const { courseId } = req.body;
+    const { courseId, code } = req.body;
     const userId = req.user._id;
+
+    // Verify enrollment code if required
+    const settings = await SystemSettings.getInstance();
+    if (settings.courseEnrollmentCode && settings.courseEnrollmentCode.trim() !== '') {
+        if (!code || code !== settings.courseEnrollmentCode) {
+            return res.status(403).json({ message: 'Código de matrícula inválido ou ausente.' });
+        }
+    }
 
     const course = await Course.findById(courseId);
     if (!course) {
       return res.status(404).json({ message: 'Course not found' });
+    }
+
+    // Check if user is the professor of this course
+    const isProfessor = req.user.role === 'professor' || (req.user.secondaryRoles && req.user.secondaryRoles.includes('professor'));
+    if (isProfessor && course.instructor.toString() === userId.toString()) {
+      return res.status(403).json({ message: 'Professores não podem se matricular em seus próprios cursos.' });
     }
 
     // Check if already enrolled in any classroom for this course
@@ -504,12 +521,14 @@ exports.deleteClassroom = async (req, res) => {
 // @access  Private
 exports.getClassroomStudents = async (req, res) => {
   try {
-    const classroom = await Classroom.findById(req.params.id).populate('course', '_id title');
+    const classroom = await Classroom.findById(req.params.id);
     if (!classroom) return res.status(404).json({ message: 'Classroom not found' });
-    if (!classroom.course) return res.json([]);
-
-    const students = await User.find({ role: { $in: ['student', 'collector'] }, enrolledCourses: { $in: [classroom.course._id] } })
+    
+    // Fetch students using the students array stored in the classroom
+    // This ensures we get exactly the students in this classroom, regardless of their role
+    const students = await User.find({ _id: { $in: classroom.students || [] } })
       .select('name email profileImage createdAt');
+    
     res.json(students);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -598,6 +617,60 @@ exports.updateLessonStatus = async (req, res) => {
     await classroom.save();
 
     res.json(lesson);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+};
+
+// @desc    Delete lesson from classroom
+// @route   DELETE /api/classrooms/:classroomId/lessons/:lessonId
+// @access  Private/Admin/Professor
+exports.deleteLesson = async (req, res) => {
+  try {
+    const { classroomId, lessonId } = req.params;
+
+    const classroom = await Classroom.findById(classroomId);
+    if (!classroom) {
+      return res.status(404).json({ message: 'Classroom not found' });
+    }
+
+    // Check if user is admin or the professor of the classroom
+    // Also check if user is in the list of professors
+    const isAdmin = ['admin', 'administrator1', 'Superadministrator2'].includes(req.user.role);
+    const isProfessor = classroom.professor.toString() === req.user._id.toString();
+    const isAdditionalProfessor = classroom.professors && classroom.professors.includes(req.user._id);
+
+    if (!isAdmin && !isProfessor && !isAdditionalProfessor) {
+         return res.status(403).json({ message: 'Not authorized to delete this lesson' });
+    }
+
+    // Check if lesson exists
+    const lesson = classroom.lessons.id(lessonId);
+    if (!lesson) {
+      return res.status(404).json({ message: 'Lesson not found' });
+    }
+
+    // Delete associated files
+    const deleteFile = (filePath) => {
+        if (!filePath) return;
+        // Construct absolute path assuming files are in server/uploads
+        // filePath from DB is like /uploads/filename.ext
+        const fullPath = path.join(__dirname, '..', 'uploads', path.basename(filePath));
+        if (fs.existsSync(fullPath)) {
+            fs.unlink(fullPath, (err) => {
+                if (err) console.error(`Failed to delete file: ${fullPath}`, err);
+            });
+        }
+    };
+
+    if (lesson.videoPath) deleteFile(lesson.videoPath);
+    if (lesson.supportMaterial) deleteFile(lesson.supportMaterial);
+
+    // Remove the lesson
+    classroom.lessons.pull(lessonId);
+    await classroom.save();
+
+    res.json({ message: 'Lesson removed' });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }

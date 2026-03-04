@@ -7,14 +7,20 @@ const userSchema = mongoose.Schema(
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
   role: { 
-    type: String, 
-    enum: ['student', 'professor', 'collector', 'admin'], 
-    default: 'student' 
-  },
-  isVerified: { type: Boolean, default: false },
+      type: String, 
+      enum: ['student', 'professor', 'collector', 'admin'], 
+      default: 'student' 
+    },
+    secondaryRoles: [{ 
+      type: String, 
+      enum: ['student', 'professor', 'collector', 'admin'] 
+    }],
+    isVerified: { type: Boolean, default: false },
   verificationToken: { type: String },
   resetPasswordToken: { type: String },
   resetPasswordExpire: { type: Date },
+  deletionCode: { type: String },
+  deletionCodeExpires: { type: Date },
   isBlocked: { type: Boolean, default: false },
     bio: { type: String },
     profileImage: { type: String },
@@ -77,7 +83,8 @@ const userSchema = mongoose.Schema(
         profileVisibility: { type: String, enum: ['public', 'members', 'private'], default: 'public' },
         showActivityStatus: { type: Boolean, default: true }
       },
-      studentMode: { type: Boolean, default: false }
+      studentMode: { type: Boolean, default: false },
+      collectorMode: { type: Boolean, default: false }
     },
     
     // Status Logic
@@ -86,6 +93,13 @@ const userSchema = mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Indexes
+userSchema.index({ role: 1 });
+userSchema.index({ secondaryRoles: 1 });
+userSchema.index({ isVerified: 1 });
+userSchema.index({ isBlocked: 1 });
+userSchema.index({ email: 1 }); // Already unique, but good to be explicit or if unique removed
 
 userSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);

@@ -16,6 +16,8 @@ const eventSchema = new mongoose.Schema({
   maxSpots: { type: Number, default: 50 },
   isFree: { type: Boolean, default: false },
   isFeatured: { type: Boolean, default: false },
+  isBroadcasting: { type: Boolean, default: false },
+  broadcastCount: { type: Number, default: 0 },
   instructor: { type: String },
   category: { 
     type: String, 

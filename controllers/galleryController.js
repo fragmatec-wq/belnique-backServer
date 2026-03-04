@@ -32,6 +32,7 @@ exports.getArtworks = async (req, res) => {
     const artworks = await Artwork.find(query)
       .populate('artist', 'name profileImage')
       .populate('bids.bidder', 'name profileImage')
+      .populate('comments.user', 'name profileImage')
       .sort({ createdAt: -1 });
     res.json(artworks);
   } catch (err) {
@@ -61,6 +62,11 @@ exports.createArtwork = async (req, res) => {
     });
 
     const savedArtwork = await newArtwork.save();
+    
+    // Populate necessary fields for the frontend
+    const populatedArtwork = await Artwork.findById(savedArtwork._id)
+      .populate('artist', 'name profileImage')
+      .populate('comments.user', 'name profileImage');
 
     const isRealAdmin = req.user && (req.user.role === 'administrator1' || req.user.role === 'Superadministrator2');
     await logActivity({
@@ -71,7 +77,7 @@ exports.createArtwork = async (req, res) => {
       targetId: savedArtwork._id
     });
 
-    res.status(201).json(savedArtwork);
+    res.status(201).json(populatedArtwork);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -119,7 +125,13 @@ exports.updateArtwork = async (req, res) => {
 
     if (approvalStatus) artwork.approvalStatus = approvalStatus;
 
-    const updatedArtwork = await artwork.save();
+    await artwork.save();
+    
+    // Re-fetch to populate fields
+    const updatedArtwork = await Artwork.findById(req.params.id)
+      .populate('artist', 'name profileImage')
+      .populate('bids.bidder', 'name profileImage')
+      .populate('comments.user', 'name profileImage');
     
     // Check for status change and create notification
     if (approvalStatus && approvalStatus !== oldStatus) {
@@ -229,8 +241,7 @@ exports.likeArtwork = async (req, res) => {
 exports.commentArtwork = async (req, res) => {
   try {
     const { text, userId } = req.body;
-    const artwork = await Artwork.findById(req.params.id)
-      .populate('comments.user', 'name profileImage');
+    const artwork = await Artwork.findById(req.params.id);
     
     if (!artwork) return res.status(404).json({ message: 'Artwork not found' });
 
@@ -400,6 +411,30 @@ exports.acceptBid = async (req, res) => {
 
 exports.deleteArtwork = async (req, res) => {
   try {
+    const artwork = await Artwork.findById(req.params.id);
+    if (!artwork) return res.status(404).json({ message: 'Artwork not found' });
+
+    // Try to remove each image file from disk
+    const tryUnlink = async (urlPath) => {
+      try {
+        if (!urlPath) return;
+        if (urlPath.startsWith('http')) return;
+        const relative = urlPath.replace(/^\//, '');
+        const filePath = path.join(__dirname, '..', relative);
+        if (fs.existsSync(filePath)) {
+          await fs.promises.unlink(filePath);
+        }
+      } catch (err) {
+        console.warn('Error deleting artwork file:', urlPath, err.message || err);
+      }
+    };
+
+    if (Array.isArray(artwork.images)) {
+      for (const img of artwork.images) {
+        await tryUnlink(img);
+      }
+    }
+
     await Artwork.findByIdAndDelete(req.params.id);
     res.json({ message: 'Artwork deleted' });
   } catch (err) {

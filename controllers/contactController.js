@@ -16,6 +16,11 @@ exports.createMessage = async (req, res) => {
     });
 
     await newMessage.save();
+
+    if (req.io) {
+      req.io.emit('new-contact-message', newMessage);
+    }
+
     res.status(201).json({ message: 'Mensagem enviada com sucesso', data: newMessage });
   } catch (error) {
     console.error('Erro ao enviar mensagem:', error);

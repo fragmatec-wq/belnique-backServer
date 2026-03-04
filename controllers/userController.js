@@ -4,6 +4,17 @@ const crypto = require('crypto');
 const User = require('../models/User');
 const logActivity = require('../utils/activityLogger');
 const sendEmail = require('../utils/sendEmail');
+const Classroom = require('../models/Classroom');
+const Assessment = require('../models/Assessment');
+const Activity = require('../models/Activity');
+const Artwork = require('../models/Artwork');
+const Course = require('../models/Course');
+const Event = require('../models/Event');
+const BlogPost = require('../models/BlogPost');
+const Post = require('../models/Post');
+const Review = require('../models/Review');
+const Article = require('../models/Article');
+const Order = require('../models/Order');
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -11,10 +22,46 @@ const generateToken = (id) => {
   });
 };
 
-const Classroom = require('../models/Classroom'); // Import Classroom model
-const Assessment = require('../models/Assessment'); // Import Assessment model
-const Activity = require('../models/Activity'); // Import Activity model
-const Artwork = require('../models/Artwork'); // Import Artwork model
+const checkDependencies = async (userId) => {
+    const coursesTeachingCount = await Course.countDocuments({ instructor: userId });
+    const coursesEnrolledCount = await Course.countDocuments({ studentsEnrolled: userId });
+    const artworksCount = await Artwork.countDocuments({ artist: userId });
+    const eventsOrganizedCount = await Event.countDocuments({ organizer: userId });
+    const eventsAttendingCount = await Event.countDocuments({ attendees: userId });
+    const blogPostsCount = await BlogPost.countDocuments({ author: userId });
+    const postsCount = await Post.countDocuments({ author: userId });
+    const reviewsCount = await Review.countDocuments({ user: userId });
+    const articlesCount = await Article.countDocuments({ author: userId });
+    const ordersCount = await Order.countDocuments({ user: userId });
+
+    const hasDependencies = 
+      coursesTeachingCount > 0 || 
+      coursesEnrolledCount > 0 || 
+      artworksCount > 0 || 
+      eventsOrganizedCount > 0 || 
+      eventsAttendingCount > 0 || 
+      blogPostsCount > 0 || 
+      postsCount > 0 ||
+      reviewsCount > 0 ||
+      articlesCount > 0 ||
+      ordersCount > 0;
+      
+    if (hasDependencies) {
+        const reasons = [];
+        if (coursesTeachingCount > 0) reasons.push('Cursos criados');
+        if (coursesEnrolledCount > 0) reasons.push('Matrículas em cursos');
+        if (artworksCount > 0) reasons.push('Obras de arte');
+        if (eventsOrganizedCount > 0) reasons.push('Eventos organizados');
+        if (eventsAttendingCount > 0) reasons.push('Participação em eventos');
+        if (blogPostsCount > 0) reasons.push('Postagens no blog');
+        if (postsCount > 0) reasons.push('Postagens na comunidade');
+        if (reviewsCount > 0) reasons.push('Avaliações');
+        if (articlesCount > 0) reasons.push('Artigos publicados');
+        if (ordersCount > 0) reasons.push('Histórico de pedidos');
+        return { hasDependencies: true, reasons };
+    }
+    return { hasDependencies: false };
+};
 
 // @desc    Auth user with Google
 // @route   POST /api/users/google-login
@@ -23,7 +70,6 @@ const authGoogle = async (req, res) => {
   const { token, role } = req.body;
   
   try {
-    // Validate access_token by fetching user info from Google
     const response = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${token}`);
     
     if (!response.ok) {
@@ -33,7 +79,6 @@ const authGoogle = async (req, res) => {
     const googleUser = await response.json();
     const { email, name, picture, sub } = googleUser;
     
-    // Check if user exists
     let user = await User.findOne({ email });
     
     if (user) {
@@ -44,12 +89,12 @@ const authGoogle = async (req, res) => {
            });
         }
  
-        // If se o usuário existe, retorna o token
         res.json({
             _id: user._id,
             name: user.name,
             email: user.email,
             role: user.role,
+            secondaryRoles: user.secondaryRoles,
             bio: user.bio,
             phone: user.phone,
             gender: user.gender,
@@ -64,14 +109,13 @@ const authGoogle = async (req, res) => {
             token: generateToken(user._id),
         }); 
     } else {
-        // Se o usuario não existir, cria um novo
         const randomPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
         
         user = await User.create({
             name,
             email,
             password: randomPassword,
-            role: role || 'student', // Use provided role or default to student
+            role: role || 'student',
             profileImage: picture,
             googleId: sub,
             isVerified: true
@@ -90,6 +134,7 @@ const authGoogle = async (req, res) => {
                 name: user.name,
                 email: user.email,
                 role: user.role,
+                secondaryRoles: user.secondaryRoles,
                 bio: user.bio,
                 avatar: user.profileImage,
                 preferences: user.preferences,
@@ -114,8 +159,9 @@ const authUser = async (req, res) => {
 
   const user = await User.findOne({ email });
 
+  console.log(user.gender)
+
   if (user && (await user.matchPassword(password))) {
-    // Check if user is blocked
     if (user.isBlocked) {
        return res.status(403).json({ 
          message: 'Sua conta foi bloqueada. Entre em contato com o suporte.',
@@ -123,7 +169,6 @@ const authUser = async (req, res) => {
        });
     }
 
-    // Check if user is verified
     if (!user.isVerified) {
        return res.status(403).json({ 
          message: 'Email não verificado. Por favor, verifique seu email.',
@@ -132,11 +177,15 @@ const authUser = async (req, res) => {
        });
     }
 
+    console.log(`Género: ${user.gender} do usuário ${user.name}`); // Log do gênero do usuário
+
     res.json({
       _id: user._id,
       name: user.name,
       email: user.email,
       role: user.role,
+      gender: user.gender,
+      secondaryRoles: user.secondaryRoles,
       bio: user.bio,
       phone: user.phone,
       location: user.location,
@@ -147,6 +196,7 @@ const authUser = async (req, res) => {
       points: user.points,
       level: user.level,
       token: generateToken(user._id),
+      gend: {gender: user.gender},
     });
   } else {
     res.status(401).json({ message: 'E-mail ou palavra-passe Inválido!' });
@@ -158,7 +208,7 @@ const authUser = async (req, res) => {
 // @access  Public
 const registerUser = async (req, res) => {
   try {
-    const { name, email, password, role, gender, birthDate } = req.body;
+    const { name, email, password, role, gender, birthDate, phone } = req.body;
 
     const userExists = await User.findOne({ email });
 
@@ -167,22 +217,21 @@ const registerUser = async (req, res) => {
       return;
     }
 
-    // Gerar token de verificação
     const verificationToken = crypto.randomBytes(20).toString('hex');
 
     const user = await User.create({
       name,
       email,
       password,
-      role: role || 'student', // Default to student
+      role: role || 'student',
       gender,
       birthDate,
+      phone,
       verificationToken,
-      isVerified: false // Usuário começa não verificado
+      isVerified: false
     });
 
     if (user) {
-      // Enviar email de verificação
       const origin = req.headers.origin;
       const baseClientUrl = process.env.CLIENT_URL || origin || 'https://ateliebelnique.vercel.app';
       const verificationUrl = `${baseClientUrl}/verify-email?token=${verificationToken}`;
@@ -202,11 +251,8 @@ const registerUser = async (req, res) => {
         });
       } catch (emailError) {
         console.error('Erro ao enviar email de verificação:', emailError);
-        // Não falhamos o registro se o email falhar, mas logamos o erro.
-        // O usuário poderá pedir reenvio depois (feature futura).
       }
 
-      // Log Activity
       logActivity({
         user: user._id,
         action: 'USER_REGISTER',
@@ -219,13 +265,13 @@ const registerUser = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        secondaryRoles: user.secondaryRoles,
         bio: user.bio,
         avatar: user.profileImage,
         gender: user.gender,
         birthDate: user.birthDate,
         preferences: user.preferences,
         message: 'Cadastro realizado com sucesso. Verifique seu email para ativar a conta.'
-        // Token removido para impedir login automático antes da verificação
       });
     } else {
       res.status(400).json({ message: 'Invalid user data' });
@@ -248,6 +294,7 @@ const getUserProfile = async (req, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
+      secondaryRoles: user.secondaryRoles,
       bio: user.bio,
       phone: user.phone,
       location: user.location,
@@ -307,12 +354,6 @@ const getOnlineUsers = async (req, res) => {
       lastActiveAt: { $gte: twoMinutesAgo }
     }).select('_id name profileImage role');
     
-    // Also update offline status for stale users (optional, but good for cleanup)
-    // await User.updateMany(
-    //   { lastActiveAt: { $lt: twoMinutesAgo }, isOnline: true },
-    //   { isOnline: false }
-    // );
-    
     res.json(onlineUsers.map(u => u._id));
   } catch (error) {
     console.error("Get online users error:", error);
@@ -348,7 +389,6 @@ const updateUserProfile = async (req, res) => {
       user.password = req.body.password;
     }
     
-    // Update preferences if provided
     if (req.body.preferences) {
       user.preferences = {
         ...user.preferences,
@@ -356,7 +396,8 @@ const updateUserProfile = async (req, res) => {
         notifications: { ...user.preferences.notifications, ...req.body.preferences.notifications },
         appearance: { ...user.preferences.appearance, ...req.body.preferences.appearance },
         privacy: { ...user.preferences.privacy, ...req.body.preferences.privacy },
-        studentMode: req.body.preferences.studentMode !== undefined ? req.body.preferences.studentMode : user.preferences.studentMode
+        studentMode: req.body.preferences.studentMode !== undefined ? req.body.preferences.studentMode : user.preferences.studentMode,
+        collectorMode: req.body.preferences.collectorMode !== undefined ? req.body.preferences.collectorMode : user.preferences.collectorMode
       };
     }
 
@@ -367,6 +408,7 @@ const updateUserProfile = async (req, res) => {
       name: updatedUser.name,
       email: updatedUser.email,
       role: updatedUser.role,
+      secondaryRoles: updatedUser.secondaryRoles,
       bio: updatedUser.bio,
       phone: updatedUser.phone,
       location: updatedUser.location,
@@ -391,65 +433,124 @@ const getDashboardStats = async (req, res) => {
   }
 
   let stats = {};
+  let targetRole = user.role;
+  if (req.query.role) {
+      const allowedRoles = [user.role, ...(user.secondaryRoles || [])];
+      if (allowedRoles.includes(req.query.role)) {
+          targetRole = req.query.role;
+      }
+  }
 
-  if (user.role === 'student') {
-    // Compute real stats based on enrolled courses and related classrooms
+  if (targetRole === 'student') {
     const enrolledCount = Array.isArray(user.enrolledCourses) ? user.enrolledCourses.length : 0;
-    let classroomsCount = 0;
+    
+    const classroomsPromise = enrolledCount > 0 
+      ? Classroom.find({ 
+          status: 'active', 
+          course: { $in: user.enrolledCourses },
+          students: user._id 
+        }).lean()
+      : Promise.resolve([]);
+
+    const acquiredArtworksCount = user.ownedArtworks ? user.ownedArtworks.length : 0;
+    const recentAcquiredPromise = acquiredArtworksCount > 0 
+      ? Artwork.find({ 
+          _id: { $in: user.ownedArtworks } 
+        }).select('title images price createdAt artist').populate('artist', 'name').lean()
+      : Promise.resolve([]);
+
+    const favoritesCount = user.favorites ? user.favorites.length : 0;
+    const recentFavoritesPromise = favoritesCount > 0
+      ? Artwork.find({ 
+          _id: { $in: user.favorites } 
+        }).select('title images price artist').populate('artist', 'name').lean()
+      : Promise.resolve([]);
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const activityLevelPromise = Activity.countDocuments({ 
+        user: user._id,
+        createdAt: { $gte: thirtyDaysAgo },
+        action: { $nin: ['USER_REGISTER', 'USER_REGISTER_GOOGLE'] } 
+    });
+    
+    const recentActivityPromise = Activity.find({ 
+        user: user._id,
+        action: { $nin: ['USER_REGISTER', 'USER_REGISTER_GOOGLE'] } 
+    }).sort({ createdAt: -1 }).limit(10).lean();
+
+    const [classrooms, recentAcquired, recentFavorites, activityLevel, recentActivity] = await Promise.all([
+      classroomsPromise,
+      recentAcquiredPromise,
+      recentFavoritesPromise,
+      activityLevelPromise,
+      recentActivityPromise
+    ]);
+
+    let classroomsCount = classrooms.length;
     let totalLessons = 0;
     let completedLessons = 0;
 
-    if (enrolledCount > 0) {
-      const classrooms = await Classroom.find({ 
-          status: 'active', 
-          course: { $in: user.enrolledCourses },
-          students: user._id // Only count classrooms where the student is actually enrolled
-      });
-      classroomsCount = classrooms.length;
-      classrooms.forEach(c => {
-        if (Array.isArray(c.lessons)) {
-          totalLessons += c.lessons.length;
-          // Calculate completed lessons based on user.completedLessons
-          if (user.completedLessons && user.completedLessons.length > 0) {
-            const completedLessonIds = user.completedLessons.map(id => id.toString());
-            completedLessons += c.lessons.filter(l => completedLessonIds.includes(l._id.toString())).length;
-          }
+    classrooms.forEach(c => {
+      if (Array.isArray(c.lessons)) {
+        totalLessons += c.lessons.length;
+        if (user.completedLessons && user.completedLessons.length > 0) {
+          const completedLessonIds = user.completedLessons.map(id => id.toString());
+          completedLessons += c.lessons.filter(l => completedLessonIds.includes(l._id.toString())).length;
         }
-      });
-    } else {
-      classroomsCount = 0;
-    }
+      }
+    });
 
     const averageProgress = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
+
+    let balance = 0;
+    if (recentAcquired.length > 0) {
+        balance = recentAcquired.reduce((acc, artwork) => {
+            const price = artwork.type === 'auction' ? (artwork.currentBid || 0) : (artwork.price || 0);
+            return acc + price;
+        }, 0);
+    }
 
     stats = {
       enrolledCourses: enrolledCount,
       averageProgress,
       completedLessons,
       classrooms: classroomsCount,
-      studyDays: user.studyLog || []
+      studyDays: user.studyLog || [],
+      acquiredArtworks: acquiredArtworksCount,
+      recentAcquired,
+      favorites: favoritesCount,
+      recentFavorites,
+      activityLevel: activityLevel,
+      recentActivity,
+      balance: balance
     };
-  } else if (user.role === 'professor') {
-    // Fetch real stats for professor
-    const activeClasses = await Classroom.countDocuments({ 
-        $or: [{ professor: user._id }, { professors: user._id }],
+  } else if (targetRole === 'professor') {
+    const professorFilter = { $or: [{ professor: user._id }, { professors: user._id }] };
+
+    const activeClassesPromise = Classroom.countDocuments({ 
+        ...professorFilter,
         status: 'active',
         type: 'normal'
     });
 
-    const homeServicesCount = await Classroom.countDocuments({
-        $or: [{ professor: user._id }, { professors: user._id }],
+    const homeServicesCountPromise = Classroom.countDocuments({
+        ...professorFilter,
         status: 'active',
         type: 'home'
     });
     
-    // Calculate total lessons and next class
-    const classrooms = await Classroom.find({ 
-        $or: [{ professor: user._id }, { professors: user._id }],
+    const classroomsPromise = Classroom.find({ 
+        ...professorFilter,
         status: 'active' 
-    });
+    }).lean();
     
-    // Calculate total students
+    const [activeClasses, homeServicesCount, classrooms] = await Promise.all([
+      activeClassesPromise,
+      homeServicesCountPromise,
+      classroomsPromise
+    ]);
+
     const courseIds = classrooms.map(c => c.course).filter(id => id);
     const totalStudents = await User.countDocuments({ enrolledCourses: { $in: courseIds }, role: 'student' });
 
@@ -479,7 +580,6 @@ const getDashboardStats = async (req, res) => {
       }
     });
 
-    // Sort by date ascending
     allScheduledLessons.sort((a, b) => a.date - b.date);
     const upcomingClasses = allScheduledLessons.slice(0, 2);
     const nextClassData = upcomingClasses.length > 0 ? upcomingClasses[0] : null;
@@ -497,13 +597,11 @@ const getDashboardStats = async (req, res) => {
       totalLessons,
       nextClass: nextClassString,
       nextClassData,
-      upcomingClasses // Return top 2
+      upcomingClasses
     };
-  } else if (user.role === 'collector') {
-    // 1. Acquired Artworks count
+  } else if (targetRole === 'collector') {
     const acquiredArtworksCount = user.ownedArtworks ? user.ownedArtworks.length : 0;
     
-    // Get full acquired artworks details
     let recentAcquired = [];
     if (acquiredArtworksCount > 0) {
         recentAcquired = await Artwork.find({ 
@@ -511,10 +609,8 @@ const getDashboardStats = async (req, res) => {
         }).select('title images price createdAt artist');
     }
 
-    // 2. Favorites count
     const favoritesCount = user.favorites ? user.favorites.length : 0;
     
-    // Get full favorites details
     let recentFavorites = [];
     if (favoritesCount > 0) {
         recentFavorites = await Artwork.find({ 
@@ -522,22 +618,19 @@ const getDashboardStats = async (req, res) => {
         }).select('title images price artist');
     }
 
-    // 3. Activity Level (count of activities in last 30 days)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const activityLevel = await Activity.countDocuments({ 
         user: user._id,
         createdAt: { $gte: thirtyDaysAgo },
-        action: { $nin: ['USER_REGISTER', 'USER_REGISTER_GOOGLE'] } // Exclude registration logs
+        action: { $nin: ['USER_REGISTER', 'USER_REGISTER_GOOGLE'] } 
     });
     
-    // Get recent activity details
     const recentActivity = await Activity.find({ 
         user: user._id,
-        action: { $nin: ['USER_REGISTER', 'USER_REGISTER_GOOGLE'] } // Exclude registration logs
+        action: { $nin: ['USER_REGISTER', 'USER_REGISTER_GOOGLE'] } 
     }).sort({ createdAt: -1 }).limit(10);
 
-    // 4. Balance (Sum of prices of owned artworks)
     let balance = 0;
     if (recentAcquired.length > 0) {
         balance = recentAcquired.reduce((acc, artwork) => {
@@ -546,7 +639,6 @@ const getDashboardStats = async (req, res) => {
         }, 0);
     }
 
-    // Calculate student stats for collector (Hybrid Mode)
     let collectorClassroomsCount = 0;
     let collectorTotalLessons = 0;
     let collectorCompletedLessons = 0;
@@ -573,13 +665,12 @@ const getDashboardStats = async (req, res) => {
 
     stats = {
       acquiredArtworks: acquiredArtworksCount,
-      recentAcquired, // Added
+      recentAcquired,
       favorites: favoritesCount,
-      recentFavorites, // Added
+      recentFavorites,
       activityLevel: activityLevel,
-      recentActivity, // Added
+      recentActivity,
       balance: balance,
-      // Include student stats for hybrid mode
       studentStats: {
         enrolledCourses: user.enrolledCourses ? user.enrolledCourses.length : 0,
         averageProgress: collectorAverageProgress,
@@ -630,7 +721,6 @@ const getProfessorSchedule = async (req, res) => {
     }
   });
 
-  // Sort by date
   schedule.sort((a, b) => new Date(a.date) - new Date(b.date));
   res.json(schedule);
 };
@@ -655,20 +745,18 @@ const getStudentCourses = async (req, res) => {
         return res.status(403).json({ message: 'Acesso negado' });
     }
 
-    // Find classrooms where the student is enrolled
     const classrooms = await Classroom.find({ 
         students: req.user._id,
         status: 'active'
     }).populate('course');
 
-    // Extract courses from classrooms and format them
     const courses = classrooms.map(c => ({
         _id: c.course._id,
         title: c.course.title,
         description: c.course.description,
         thumbnail: c.course.thumbnail,
         classroomId: c._id,
-        progress: 0 // Placeholder
+        progress: 0 
     }));
 
     res.json(courses);
@@ -684,7 +772,6 @@ const getHomeDetails = async (req, res) => {
   try {
     let targetUserId = req.user._id;
 
-    // Allow Admin to fetch other student's details
     const isAdmin = ['admin', 'administrator1', 'Superadministrator2'].includes(req.user.role);
     if (isAdmin && req.query.studentId) {
         targetUserId = req.query.studentId;
@@ -712,7 +799,6 @@ const updateHomeDetails = async (req, res) => {
     const user = await User.findById(req.user._id);
     const courseId = req.params.courseId;
     
-    // Initialize array if undefined
     if (!user.homeCourseDetails) {
         user.homeCourseDetails = [];
     }
@@ -722,8 +808,6 @@ const updateHomeDetails = async (req, res) => {
     );
 
     if (index > -1) {
-      // Update existing
-      // Mongoose subdocument update
       if (req.body.studentCount !== undefined) user.homeCourseDetails[index].studentCount = req.body.studentCount;
       if (req.body.ageRange !== undefined) user.homeCourseDetails[index].ageRange = req.body.ageRange;
       if (req.body.address !== undefined) user.homeCourseDetails[index].address = req.body.address;
@@ -732,7 +816,6 @@ const updateHomeDetails = async (req, res) => {
       if (req.body.preferredSchedule !== undefined) user.homeCourseDetails[index].preferredSchedule = req.body.preferredSchedule;
       if (req.body.status !== undefined) user.homeCourseDetails[index].status = req.body.status;
     } else {
-      // Create new
       user.homeCourseDetails.push({
         course: courseId,
         ...req.body
@@ -748,15 +831,42 @@ const updateHomeDetails = async (req, res) => {
   }
 };
 
-
-
-
 const getUserById = async (req, res) => {
-  const user = await User.findById(req.params.id).select('-password');
-  if (user) {
-    res.json(user);
-  } else {
-    res.status(404).json({ message: 'User not found' });
+  try {
+    const user = await User.findById(req.params.id)
+      .select('-password -email -phone -address -documentType -documentNumber -resetPasswordToken -resetPasswordExpire -deletionCode -deletionCodeExpires -verificationToken')
+      .populate('enrolledCourses', 'title')
+      .lean();
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Return comprehensive public profile information respecting privacy
+    const publicProfile = {
+      id: user._id,
+      name: user.name,
+      role: user.role,
+      phone: user.phone || "941 403 160",
+      secondaryRoles: user.secondaryRoles || [],
+      bio: user.bio || '',
+      profileImage: user.profileImage || null,
+      gender: user.gender || null,
+      specialization: user.specialization || null,
+      points: user.points || 0,
+      level: user.level || 1,
+      location: user.location || null,
+      website: user.website || "ateliebelnique.com",
+      isOnline: user.isOnline || false,
+      course: user.enrolledCourses && user.enrolledCourses.length > 0 
+        ? user.enrolledCourses[0].title 
+        : null,
+      professorType: user.role === 'professor' ? user.professorType : null
+    };
+    
+    res.json(publicProfile);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -815,6 +925,52 @@ const verifyEmail = async (req, res) => {
   });
 };
 
+// @desc    Resend verification email
+// @route   POST /api/users/resend-verification
+// @access  Public
+const resendVerificationEmail = async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({ message: 'Usuário não encontrado' });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({ message: 'Este email já foi verificado' });
+    }
+
+    const verificationToken = crypto.randomBytes(20).toString('hex');
+    user.verificationToken = verificationToken;
+    await user.save();
+
+    const origin = req.headers.origin;
+    const baseClientUrl = process.env.CLIENT_URL || origin || 'https://ateliebelnique.vercel.app';
+    const verificationUrl = `${baseClientUrl}/verify-email?token=${verificationToken}`;
+
+    await sendEmail({
+      email: user.email,
+      subject: 'Reenvio: Verifique seu email - Ateliê Belnique',
+      message: `Por favor, verifique seu email clicando no link: ${verificationUrl}`,
+      html: `
+        <h1>Bem-vindo(a) à Ateliê Belnique!</h1>
+        <p>Você solicitou um novo link de verificação.</p>
+        <p>Por favor, verifique seu email clicando no botão abaixo:</p>
+        <a href="${verificationUrl}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Verificar Email</a>
+        <p>Ou copie e cole este link no seu navegador:</p>
+        <p>${verificationUrl}</p>
+      `
+    });
+
+    res.json({ message: 'Email de verificação reenviado com sucesso' });
+  } catch (error) {
+    console.error('Erro ao reenviar email:', error);
+    res.status(500).json({ message: 'Erro ao enviar email' });
+  }
+};
+
 // @desc    Forgot Password
 // @route   POST /api/users/forgot-password
 // @access  Public
@@ -828,16 +984,13 @@ const forgotPassword = async (req, res) => {
       return res.status(404).json({ message: 'Email não cadastrado' });
     }
 
-    // Get reset token
     const resetToken = crypto.randomBytes(20).toString('hex');
 
-    // Hash token and set to resetPasswordToken field
     user.resetPasswordToken = crypto
       .createHash('sha256')
       .update(resetToken)
       .digest('hex');
 
-    // Set expire
     user.resetPasswordExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
 
     await user.save();
@@ -879,7 +1032,6 @@ const forgotPassword = async (req, res) => {
 // @route   PUT /api/users/reset-password/:resetToken
 // @access  Public
 const resetPassword = async (req, res) => {
-  // Get hashed token
   const resetPasswordToken = crypto
     .createHash('sha256')
     .update(req.params.resetToken)
@@ -895,7 +1047,6 @@ const resetPassword = async (req, res) => {
       return res.status(400).json({ message: 'Token inválido ou expirado' });
     }
 
-    // Set new password
     user.password = req.body.password;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
@@ -930,6 +1081,189 @@ const logoutUser = async (req, res) => {
   res.status(200).json({ message: 'Logged out successfully' });
 };
 
+// @desc    Export User Data
+// @route   GET /api/users/export
+// @access  Private
+const exportUserData = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Gather courses
+    const enrolledCourses = await Course.find({ _id: { $in: user.enrolledCourses } }).lean();
+    const teachingCourses = user.role === 'professor' ? await Course.find({ instructor: user._id }).lean() : [];
+
+    const data = {
+        profile: {
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            bio: user.bio,
+            location: user.location,
+            website: user.website,
+            createdAt: user.createdAt
+        },
+        courses: {
+            enrolled: enrolledCourses,
+            teaching: teachingCourses
+        }
+    };
+
+    res.json(data);
+  } catch (error) {
+    console.error('Export data error:', error);
+    res.status(500).json({ message: 'Error exporting data' });
+  }
+};
+
+// @desc    Delete user profile (Self-delete) - DEPRECATED/BLOCKED
+// @route   DELETE /api/users/profile
+// @access  Private
+const deleteUserProfile = async (req, res) => {
+    res.status(403).json({ 
+        message: 'A exclusão direta não é mais permitida. Por favor, solicite um código de exclusão na aba de Privacidade.',
+        code: 'DEPRECATION_ERROR'
+    });
+};
+
+// @desc    Delete user (Admin)
+// @route   DELETE /api/users/:id
+// @access  Private/Admin
+const adminDeleteUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const { hasDependencies, reasons } = await checkDependencies(user._id);
+
+    if (hasDependencies) {
+        return res.status(400).json({ 
+            message: 'Não é possível excluir a conta pois existem interações registradas.',
+            details: reasons,
+            code: 'DEPENDENCIES_EXIST'
+        });
+    }
+    
+    await User.findByIdAndDelete(user._id);
+    
+    res.json({ message: 'User removed' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Request account deletion code
+// @route   POST /api/users/request-deletion
+// @access  Private
+const requestDeletionCode = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({ message: 'Usuário não encontrado' });
+    }
+
+    const deletionCode = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    const deletionCodeHash = crypto
+      .createHash('sha256')
+      .update(deletionCode)
+      .digest('hex');
+
+    user.deletionCode = deletionCodeHash;
+    user.deletionCodeExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+    await user.save();
+
+    const message = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h1 style="color: #e11d48;">Solicitação de Exclusão de Conta</h1>
+        <p>Você solicitou a exclusão da sua conta no Ateliê Belnique.</p>
+        <p>Para confirmar esta ação irreversível, use o código abaixo:</p>
+        <div style="background-color: #f1f5f9; padding: 20px; text-align: center; border-radius: 8px; margin: 20px 0;">
+          <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #0f172a;">${deletionCode}</span>
+        </div>
+        <p>Este código expira em 10 minutos.</p>
+        <p style="color: #64748b; font-size: 14px;">Se você não solicitou a exclusão da sua conta, por favor ignore este email e altere sua senha imediatamente.</p>
+      </div>
+    `;
+
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: 'Código de Confirmação de Exclusão - Ateliê Belnique',
+        message: `Seu código de exclusão é: ${deletionCode}`,
+        html: message
+      });
+
+      res.status(200).json({ success: true, message: 'Código de verificação enviado para o seu email' });
+    } catch (err) {
+      user.deletionCode = undefined;
+      user.deletionCodeExpires = undefined;
+      await user.save();
+      return res.status(500).json({ message: 'Erro ao enviar email' });
+    }
+  } catch (error) {
+    console.error('Request deletion error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Confirm account deletion
+// @route   POST /api/users/confirm-deletion
+// @access  Private
+const confirmDeletion = async (req, res) => {
+  const { code } = req.body;
+
+  if (!code) {
+      return res.status(400).json({ message: 'Código é obrigatório' });
+  }
+
+  try {
+    const deletionCodeHash = crypto
+      .createHash('sha256')
+      .update(code)
+      .digest('hex');
+
+    const user = await User.findOne({
+      _id: req.user._id,
+      deletionCode: deletionCodeHash,
+      deletionCodeExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Código inválido ou expirado' });
+    }
+
+    const { hasDependencies, reasons } = await checkDependencies(user._id);
+
+    if (hasDependencies) {
+      return res.status(400).json({ 
+        message: 'Não é possível excluir a conta pois existem interações registradas.',
+        details: reasons,
+        code: 'DEPENDENCIES_EXIST'
+      });
+    }
+
+    await User.findByIdAndDelete(user._id);
+
+    logActivity({
+       user: user._id, 
+       action: 'USER_SELF_DELETE',
+       details: `Usuário ${user.name} excluiu sua própria conta via código de verificação`,
+       targetId: user._id
+    });
+
+    res.status(200).json({ success: true, message: 'Conta excluída com sucesso' });
+  } catch (error) {
+    console.error('Confirm deletion error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   authUser,
   authGoogle,
@@ -945,11 +1279,17 @@ module.exports = {
   getUserById,
   getMyGallery,
   verifyEmail,
+  resendVerificationEmail,
   forgotPassword,
   resetPassword,
   logoutUser,
   getHomeDetails,
   updateHomeDetails,
   updateHeartbeat,
-  getOnlineUsers
+  getOnlineUsers,
+  exportUserData,
+  deleteUserProfile,
+  adminDeleteUser,
+  requestDeletionCode,
+  confirmDeletion
 };

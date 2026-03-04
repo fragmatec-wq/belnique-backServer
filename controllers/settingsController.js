@@ -24,3 +24,18 @@ exports.updateSettings = async (req, res) => {
     res.status(400).json({ message: err.message });
   }
 };
+
+exports.verifyAdminKey = async (req, res) => {
+  try {
+    const { key } = req.body;
+    const settings = await SystemSettings.getInstance();
+    
+    if (settings.adminRegistrationKey === key) {
+      res.json({ valid: true });
+    } else {
+      res.status(401).json({ valid: false, message: 'Chave inválida' });
+    }
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};

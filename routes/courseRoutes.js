@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
-const { getCourses, getCourseById, createCourse, updateCourse, deleteCourse, createCourseReview, suggestCourse, getCourseSuggestions, getLatestReviews } = require('../controllers/courseController');
+const { getCourses, getCourseById, createCourse, updateCourse, deleteCourse, createCourseReview, suggestCourse, getCourseSuggestions, getLatestReviews, getAllReviews, deleteReview, deleteCourseSuggestion, updateCourseSuggestion } = require('../controllers/courseController');
 const { protect, admin } = require('../middleware/authMiddleware');
 
 // Multer config for image upload
@@ -36,7 +36,11 @@ function checkFileType(file, cb) {
 
 router.post('/suggest', suggestCourse);
 router.get('/suggestions', protect, admin, getCourseSuggestions);
+router.delete('/suggestions/:id', protect, admin, deleteCourseSuggestion);
+router.put('/suggestions/:id', protect, admin, updateCourseSuggestion);
 router.get('/reviews/latest', getLatestReviews);
+router.get('/reviews', getAllReviews);
+router.delete('/reviews/:id', protect, admin, deleteReview);
 router.route('/').get(getCourses).post(protect, upload.single('image'), createCourse);
 router.route('/:id/reviews').post(protect, createCourseReview);
 router.route('/:id').get(getCourseById).put(protect, upload.single('image'), updateCourse).delete(protect, deleteCourse);

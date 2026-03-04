@@ -4,6 +4,7 @@ const libraryController = require('../controllers/libraryController');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { protect, admin } = require('../middleware/authMiddleware');
 
 // Ensure uploads directory exists
 const uploadDir = path.join(__dirname, '../uploads');
@@ -44,7 +45,7 @@ router.get('/:id', libraryController.getItemById);
 
 router.post('/', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'file', maxCount: 1 }]), libraryController.createItem);
 router.put('/:id', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'file', maxCount: 1 }]), libraryController.updateItem);
-router.delete('/:id', libraryController.deleteItem);
+router.delete('/:id', protect, admin, libraryController.deleteItem);
 
 router.post('/:id/view', libraryController.viewItem);
 router.post('/:id/like', libraryController.likeItem);

@@ -35,5 +35,12 @@ const courseSchema = mongoose.Schema(
   { timestamps: true }
 );
 
+// Indexes
+courseSchema.index({ instructor: 1 });
+courseSchema.index({ category: 1 });
+courseSchema.index({ isFeatured: 1 });
+courseSchema.index({ type: 1 });
+courseSchema.index({ studentsEnrolled: 1 });
+
 const Course = mongoose.model('Course', courseSchema);
 module.exports = Course;

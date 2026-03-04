@@ -60,4 +60,6 @@ router.put('/:classroomId/lessons/:lessonId/status', protect, classroomControlle
 
 router.post('/:classroomId/lessons/:lessonId/mark-studied', protect, classroomController.markLessonAsStudied);
 
+router.delete('/:classroomId/lessons/:lessonId', protect, classroomController.deleteLesson);
+
 module.exports = router;

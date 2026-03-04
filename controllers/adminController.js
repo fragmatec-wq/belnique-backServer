@@ -38,15 +38,33 @@ const authAdmin = async (req, res) => {
   }
 };
 
+const SystemSettings = require('../models/SystemSettings');
+
 // @desc    Register a new admin
 // @route   POST /api/admin
-// @access  Public (or protected if only SuperAdmin can create admins)
-// For now, let's keep it public or basic for initial setup, 
-// but typically only SuperAdmin should create admins. 
-// Given the prompt "login e cadastro de contas admin", I'll make it open but maybe I should restrict it? 
-// The prompt says "create AdminAuth.tsx for login and register", so it implies a UI for it.
+// @access  Public
 const registerAdmin = async (req, res) => {
-  const { name, email, password, role } = req.body;
+  const { 
+    name, email, password, role,
+    province, municipality, commune, address, referencePoint,
+    taxpayerType, nif,
+    idDocumentType, idDocumentNumber, idDocumentExpirationDate,
+    mobilePrimary, mobileSecondary,
+    registrationKey, superAdminKey
+  } = req.body;
+
+  // Validate Email Domain
+  if (!email || !email.endsWith('@ateliebelnique.com')) {
+    res.status(400).json({ message: 'O email deve ser corporativo (@ateliebelnique.com)' });
+    return;
+  }
+
+  // Verify Registration Key
+  const settings = await SystemSettings.getInstance();
+  if (settings.adminRegistrationKey !== registrationKey) {
+    res.status(401).json({ message: 'Invalid registration key' });
+    return;
+  }
 
   const adminExists = await Admin.findOne({ email });
 
@@ -61,11 +79,41 @@ const registerAdmin = async (req, res) => {
      return;
   }
 
+  // Verify Super Admin Security Key
+  if (role === 'Superadministrator2') {
+    if (settings.superAdminSecurityKey !== superAdminKey) {
+      res.status(401).json({ message: 'Chave de segurança de Super Administrador inválida' });
+      return;
+    }
+  }
+
+  // Handle documents
+  const documentPaths = req.files ? req.files.map(file => file.path) : [];
+
+  // Construct ID Document object
+  const idDocument = {
+    type: idDocumentType,
+    number: idDocumentNumber,
+    expirationDate: idDocumentExpirationDate
+  };
+
   const admin = await Admin.create({
     name,
     email,
     password,
     role: role || 'administrator1',
+    province,
+    municipality,
+    commune,
+    address,
+    referencePoint,
+    taxpayerType,
+    nif,
+    idDocument,
+    mobilePrimary,
+    mobileSecondary,
+    status: 'Pending', // Default status
+    documents: documentPaths
   });
 
   if (admin) {
@@ -177,7 +225,8 @@ const createUser = async (req, res) => {
     documentType,
     documentNumber,
     address,
-    professorType
+    professorType,
+    dateOfBirth
   } = req.body;
 
   try {
@@ -186,6 +235,15 @@ const createUser = async (req, res) => {
     if (userExists) {
       res.status(400).json({ message: 'User already exists' });
       return;
+    }
+
+    // Check if document number already exists - Pra vc que ver todo o eu código, não gosto de comentar em português
+    if (documentNumber) {
+      const documentExists = await User.findOne({ documentNumber }); 
+      if (documentExists) {
+        res.status(400).json({ message: 'Já existe um usuário com este número de documento.' });
+        return;
+      }
     }
 
     // Generate random password if not provided
@@ -201,6 +259,7 @@ const createUser = async (req, res) => {
       role: role || 'student',
       phone,
       gender,
+      birthDate: dateOfBirth,
       documentType,
       documentNumber,
       address,
@@ -348,6 +407,257 @@ const uploadHeroImage = (req, res) => {
   }
 };
 
+// @desc    Get all admins
+// @route   GET /api/admin/admins
+// @access  Private (SuperAdmin)
+const getAllAdmins = async (req, res) => {
+  try {
+    const admins = await Admin.find({}).select('-password').sort({ createdAt: -1 });
+    res.json(admins);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching admins' });
+  }
+};
+
+// @desc    Delete admin
+// @route   DELETE /api/admin/admins/:id
+// @access  Private (SuperAdmin)
+const deleteAdmin = async (req, res) => {
+  try {
+    const admin = await Admin.findById(req.params.id);
+    if (!admin) {
+      return res.status(404).json({ message: 'Admin not found' });
+    }
+    
+    // Prevent deleting self
+    if (admin._id.toString() === req.admin._id.toString()) {
+        return res.status(400).json({ message: 'Cannot delete yourself' });
+    }
+
+    await admin.deleteOne();
+    res.json({ message: 'Admin removed' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error deleting admin' });
+  }
+};
+
+// @desc    Update admin status
+// @route   PUT /api/admin/admins/:id/status
+// @access  Private (SuperAdmin)
+const updateAdminStatus = async (req, res) => {
+    try {
+        const { status } = req.body;
+        const admin = await Admin.findById(req.params.id);
+        
+        if (!admin) {
+            return res.status(404).json({ message: 'Admin not found' });
+        }
+
+        if (admin._id.toString() === req.admin._id.toString()) {
+            return res.status(400).json({ message: 'Cannot update your own status' });
+        }
+
+        admin.status = status;
+        await admin.save();
+        res.json(admin);
+    } catch (error) {
+        res.status(500).json({ message: 'Error updating admin status' });
+    }
+};
+
+// @desc    Reset admin password
+// @route   POST /api/admin/admins/:id/reset-password
+// @access  Private (SuperAdmin)
+const resetAdminPassword = async (req, res) => {
+    try {
+        const adminToReset = await Admin.findById(req.params.id);
+        
+        if (!adminToReset) {
+            return res.status(404).json({ message: 'Admin not found' });
+        }
+
+        if (adminToReset._id.toString() === req.admin._id.toString()) {
+            return res.status(400).json({ message: 'Cannot reset your own password here' });
+        }
+
+        const tempPassword = crypto.randomBytes(8).toString('hex');
+        adminToReset.password = tempPassword;
+        await adminToReset.save();
+
+        res.json({ 
+            message: 'Password reset successfully', 
+            tempPassword 
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Error resetting admin password' });
+    }
+};
+
+// @desc    Promote user (add secondary role)
+// @route   PUT /api/admin/users/:id/promote
+// @access  Private (Admin)
+const promoteUser = async (req, res) => {
+  const { role, professorType } = req.body;
+  
+  try {
+      const user = await User.findById(req.params.id);
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      // If user already has this role as primary
+      if (user.role === role) {
+          return res.status(400).json({ message: 'Usuário já possui esta função como principal.' });
+      }
+
+      // Prepare update operations
+      const updateOps = {
+          $addToSet: { secondaryRoles: role }
+      };
+
+      // If promoting to professor, ensure professor specific fields are initialized
+      if (role === 'professor') {
+          if (professorType) {
+               updateOps.professorType = professorType;
+          } else if (!user.professorType) {
+               updateOps.professorType = 'normal';
+          }
+      }
+
+      // Use findByIdAndUpdate for atomic operation
+      const updatedUser = await User.findByIdAndUpdate(
+          req.params.id,
+          updateOps,
+          { new: true }
+      );
+
+      await logActivity({
+        admin: req.user ? req.user._id : undefined,
+        action: 'USER_PROMOTED',
+        details: `Usuário ${user.name} promovido para ${role}`,
+        targetId: user._id
+      });
+
+      res.json(updatedUser);
+  } catch (error) {
+      res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Demote user (remove professor role)
+// @route   PUT /api/admin/users/:id/demote
+// @access  Private (Admin)
+const demoteUser = async (req, res) => {
+  try {
+      const user = await User.findById(req.params.id);
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      if (user.role !== 'professor' && !user.secondaryRoles?.includes('professor')) {
+          return res.status(400).json({ message: 'Usuário não é um professor.' });
+      }
+
+      const updateOps = {};
+
+      // Remove professor from secondary roles
+      updateOps.$pull = { secondaryRoles: 'professor' };
+
+      // If currently primary role is professor, switch to new role
+      if (user.role === 'professor') {
+          // Determine new primary role
+          let newRole = 'student';
+          if (user.secondaryRoles && user.secondaryRoles.length > 0) {
+              // Prefer 'student' or 'collector' if available in secondary roles
+              const fallbackRole = user.secondaryRoles.find(r => r !== 'professor');
+              if (fallbackRole) {
+                  newRole = fallbackRole;
+              }
+          }
+          updateOps.role = newRole;
+          // Also make sure we pull the new primary role from secondary roles if it was there
+          // But $pull only takes one value for field usually, unless using $in
+          // Let's use $pullAll if we need to remove multiple
+          // Or just let it be, having primary role in secondary list is redundant but not fatal.
+          // However, let's keep it clean.
+          // updateOps.$pull = { secondaryRoles: { $in: ['professor', newRole] } }; 
+          // $pull with query syntax
+      }
+
+      const updatedUser = await User.findByIdAndUpdate(
+          req.params.id,
+          updateOps,
+          { new: true }
+      );
+
+      await logActivity({
+        admin: req.user ? req.user._id : undefined,
+        action: 'USER_DEMOTED',
+        details: `Usuário ${user.name} removido da função de Professor`,
+        targetId: user._id
+      });
+
+      res.json(updatedUser);
+  } catch (error) {
+      res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Test email configuration
+// @route   POST /api/admin/test-email
+// @access  Private/Admin
+const testEmailConfig = async (req, res) => {
+  const { email } = req.body;
+  // Use provided email, or admin email, or fallback to SMTP email
+  const targetEmail = email || (req.user && req.user.email) || process.env.SMTP_EMAIL;
+
+  try {
+    const info = await sendEmail({
+      email: targetEmail,
+      subject: 'Teste de Configuração de Email - Ateliê Belnique',
+      message: 'Se você recebeu este email, a configuração SMTP está funcionando corretamente.',
+      html: `
+        <h1>Teste Bem-sucedido</h1>
+        <p>A configuração de email do servidor está funcionando.</p>
+        <p><strong>Enviado em:</strong> ${new Date().toLocaleString()}</p>
+        <hr>
+        <h3>Detalhes da Configuração (Debug):</h3>
+        <ul>
+            <li><strong>SMTP Host:</strong> ${process.env.SMTP_HOST}</li>
+            <li><strong>SMTP Port:</strong> ${process.env.SMTP_PORT}</li>
+            <li><strong>SMTP User:</strong> ${process.env.SMTP_EMAIL}</li>
+        </ul>
+      `
+    });
+
+    res.json({ 
+      message: 'Email enviado com sucesso', 
+      info: {
+        messageId: info.messageId,
+        response: info.response
+      },
+      debug: {
+        host: process.env.SMTP_HOST,
+        port: process.env.SMTP_PORT,
+        user: process.env.SMTP_EMAIL
+      }
+    });
+  } catch (error) {
+    console.error('Erro no teste de email:', error);
+    res.status(500).json({ 
+      message: 'Falha ao enviar email', 
+      error: error.message,
+      code: error.code,
+      command: error.command,
+      debug: {
+        host: process.env.SMTP_HOST,
+        port: process.env.SMTP_PORT,
+        user: process.env.SMTP_EMAIL
+      }
+    });
+  }
+};
+
 module.exports = {
   authAdmin,
   registerAdmin,
@@ -360,5 +670,12 @@ module.exports = {
   getUserById,
   toggleBlockUser,
   resetProfessorPassword,
-  uploadHeroImage
+  uploadHeroImage,
+  promoteUser,
+  demoteUser,
+  testEmailConfig,
+  getAllAdmins,
+  deleteAdmin,
+  updateAdminStatus,
+  resetAdminPassword
 };

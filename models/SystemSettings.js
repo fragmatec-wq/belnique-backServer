@@ -5,7 +5,10 @@ const systemSettingsSchema = new mongoose.Schema({
   contactEmail: { type: String, default: '' },
   maintenanceMode: { type: Boolean, default: false },
   allowRegistration: { type: Boolean, default: true },
-  defaultUserRole: { type: String, default: 'student' }
+  defaultUserRole: { type: String, default: 'student' },
+  adminRegistrationKey: { type: String, default: 'admin123' },
+  superAdminSecurityKey: { type: String, default: 'superadmin123' },
+  courseEnrollmentCode: { type: String, default: '' }
 }, { timestamps: true });
 
 // Ensure only one settings document exists

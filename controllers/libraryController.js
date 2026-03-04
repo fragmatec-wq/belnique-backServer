@@ -110,10 +110,23 @@ exports.deleteItem = async (req, res) => {
   try {
     const item = await LibraryItem.findById(req.params.id);
     if (!item) return res.status(404).json({ message: 'Item not found' });
+    // Delete associated files from disk if present
+    const tryUnlink = async (urlPath) => {
+      try {
+        if (!urlPath) return;
+        if (urlPath.startsWith('http')) return;
+        const relative = urlPath.replace(/^\//, '');
+        const filePath = path.join(__dirname, '..', relative);
+        if (fs.existsSync(filePath)) {
+          await fs.promises.unlink(filePath);
+        }
+      } catch (err) {
+        console.warn('Error deleting library file:', urlPath, err.message || err);
+      }
+    };
 
-    // Optional: Delete files from disk
-    // if (item.imageUrl) ...
-    // if (item.fileUrl) ...
+    await tryUnlink(item.imageUrl);
+    await tryUnlink(item.fileUrl);
 
     await LibraryItem.findByIdAndDelete(req.params.id);
     res.json({ message: 'Item deleted' });

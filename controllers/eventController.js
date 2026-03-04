@@ -111,7 +111,7 @@ exports.updateEvent = async (req, res) => {
   try {
     const { 
       title, description, date, time, location, category, price,
-      locationType, maxSpots, isFree, isFeatured, instructor 
+      locationType, maxSpots, isFree, isFeatured, instructor, isBroadcasting
     } = req.body;
     
     const event = await Event.findById(req.params.id);
@@ -136,6 +136,15 @@ exports.updateEvent = async (req, res) => {
     
     if (isFeatured !== undefined) {
       event.isFeatured = isFeatured === 'true' || isFeatured === true;
+    }
+
+    if (isBroadcasting !== undefined) {
+      const newStatus = isBroadcasting === 'true' || isBroadcasting === true;
+      // If starting broadcast, increment counter
+      if (newStatus && !event.isBroadcasting) {
+         event.broadcastCount = (event.broadcastCount || 0) + 1;
+      }
+      event.isBroadcasting = newStatus;
     }
 
     if (req.file) {
@@ -192,17 +201,29 @@ exports.joinEvent = async (req, res) => {
     if (!event) return res.status(404).json({ message: 'Event not found' });
 
     if (event.attendees.includes(userId)) {
-      // Leave event
-      event.attendees = event.attendees.filter(id => id.toString() !== userId);
-      
-      await logActivity({
-        user: userId,
-        action: 'EVENT_LEAVE',
-        details: `Cancelou participação no evento: ${event.title}`,
-        targetId: event._id
-      });
+      // Event cancelation is disabled as per business rule
+      return res.status(400).json({ message: 'Você já está inscrito neste evento e não pode cancelar a inscrição.' });
     } else {
       // Join event
+      
+      // Check for points payment (Student/Collector)
+      if (!event.isFree && event.price > 0) {
+        const user = await User.findById(userId);
+        if (user && (user.role === 'student' || user.role === 'collector')) {
+           const pointsNeeded = event.price / 1000;
+           
+           if ((user.points || 0) < pointsNeeded) {
+             return res.status(400).json({ 
+               message: `Saldo insuficiente. Você precisa de ${pointsNeeded} pontos (Equivalente a ${event.price} Kz) para participar.` 
+             });
+           }
+
+           // Deduct points
+           user.points = (user.points || 0) - pointsNeeded;
+           await user.save();
+        }
+      }
+
       event.attendees.push(userId);
       
       await logActivity({

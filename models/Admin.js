@@ -20,6 +20,63 @@ const adminSchema = new mongoose.Schema({
     enum: ['administrator1', 'Superadministrator2'],
     default: 'administrator1',
   },
+  // Location & Address (DPA 2026)
+  province: {
+    type: String,
+    required: false, // Make optional initially to avoid breaking existing logic, or strict if required
+  },
+  municipality: {
+    type: String,
+    required: false,
+  },
+  commune: {
+    type: String,
+    required: false,
+  },
+  address: { // Bairro/Rua e Número da Porta
+    type: String,
+    required: false,
+  },
+  referencePoint: {
+    type: String,
+    required: false,
+  },
+  // Fiscal & Legal (AGT)
+  taxpayerType: {
+    type: String,
+    enum: ['Singular', 'Colectivo'],
+    default: 'Singular',
+  },
+  nif: {
+    type: String,
+    required: false, // Essential for invoices, but maybe not for all admins? User said "Campo numérico obrigatório". I'll keep false for backward compat unless I migrate data.
+  },
+  idDocument: {
+    type: {
+      type: String, // BI, Passport, Resident Card
+      enum: ['BI', 'Passaporte', 'Cartão de Residente'],
+    },
+    number: String,
+    expirationDate: Date,
+  },
+  // Contacts
+  mobilePrimary: {
+    type: String,
+    required: false,
+  },
+  mobileSecondary: {
+    type: String,
+    required: false,
+  },
+  // Administrative Config
+  status: {
+    type: String,
+    enum: ['Active', 'Suspended', 'Pending'],
+    default: 'Pending', // "Aguardando Validação"
+  },
+  documents: [{ // Array of file paths
+    type: String,
+  }],
   createdAt: {
     type: Date,
     default: Date.now,

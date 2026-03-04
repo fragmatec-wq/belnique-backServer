@@ -2,8 +2,16 @@ const mongoose = require('mongoose');
 
 const articleSchema = new mongoose.Schema({
   title: { type: String, required: true },
-  content: { type: String, required: true }, // Stores HTML
+  content: { 
+    type: String, 
+    required: function() {
+      return this.contentType === 'text';
+    }
+  }, // Stores HTML
   coverImage: { type: String },
+  pdfUrl: { type: String },
+  videoUrl: { type: String },
+  contentType: { type: String, enum: ['text', 'pdf', 'video'], default: 'text' },
   category: { type: String, required: true },
   author: { 
     type: mongoose.Schema.Types.ObjectId, 
@@ -17,9 +25,17 @@ const articleSchema = new mongoose.Schema({
   comments: [{
     text: { type: String, required: true },
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    createdAt: { type: Date, default: Date.now }
+    createdAt: { type: Date, default: Date.now },
+    likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    replies: [{
+      text: { type: String, required: true },
+      user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+      createdAt: { type: Date, default: Date.now },
+      likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
+    }]
   }],
   views: { type: Number, default: 0 },
+  shares: { type: Number, default: 0 },
   status: { 
     type: String, 
     enum: ['pending', 'approved', 'rejected'], 

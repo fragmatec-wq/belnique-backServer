@@ -100,4 +100,11 @@ const classroomSchema = new mongoose.Schema({
   }
 });
 
+// Indexes
+classroomSchema.index({ course: 1 });
+classroomSchema.index({ students: 1 });
+classroomSchema.index({ professor: 1 });
+classroomSchema.index({ status: 1 });
+classroomSchema.index({ type: 1 });
+
 module.exports = mongoose.model('Classroom', classroomSchema);

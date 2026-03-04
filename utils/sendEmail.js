@@ -8,7 +8,12 @@ const sendEmail = async (options) => {
   const user = process.env.SMTP_EMAIL;
   const pass = process.env.SMTP_PASSWORD;
 
+  // Log configuration (masking password) for debugging in production
+  console.log(`[Email Service] Preparing to send email to: ${options.email}`);
+  console.log(`[Email Service] Config: Service=${service || 'N/A'}, Host=${host || 'smtp.gmail.com'}, Port=${port || 587}, Secure=${secure}, User=${user ? 'Set' : 'Missing'}`);
+
   if (!user || !pass) {
+    console.error('[Email Service] Error: SMTP credentials (SMTP_EMAIL or SMTP_PASSWORD) not configured.');
     throw new Error('SMTP credentials not configured');
   }
 
@@ -37,10 +42,19 @@ const sendEmail = async (options) => {
     html: options.html,
   };
 
-  await transporter.verify();
-  const info = await transporter.sendMail(message);
+  try {
+    await transporter.verify();
+    console.log('[Email Service] Transporter verified successfully.');
 
-  console.log('Message sent: %s', info.messageId);
+    const info = await transporter.sendMail(message);
+    console.log('[Email Service] Message sent. ID: %s', info.messageId);
+    console.log("[Email Service] E-mail enviado com sucesso.");
+    return info;
+  } catch (error) {
+    console.error('[Email Service] Error sending email:', error);
+    console.error(`[Email Service] Falha ao enviar para ${options.email}. Motivo: ${error.message}`);
+    throw error;
+  }
 };
 
 module.exports = sendEmail;

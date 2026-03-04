@@ -21,7 +21,16 @@ const conversationSchema = new mongoose.Schema({
     type: Map,
     of: Number,
     default: {}
-  }
+  },
+  clearedHistoryAt: {
+    type: Map,
+    of: Date,
+    default: {}
+  },
+  deletedBy: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }]
 }, { timestamps: true });
 
 module.exports = mongoose.model('Conversation', conversationSchema);
