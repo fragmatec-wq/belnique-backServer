@@ -1,0 +1,110 @@
+const mongoose = require('mongoose');
+
+const classroomSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  course: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Course'
+  },
+  professor: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  professors: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  description: {
+    type: String
+  },
+  startDate: {
+    type: Date
+  },
+  endDate: {
+    type: Date
+  },
+  capacity: {
+    type: Number,
+    default: 30
+  },
+  students: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  status: {
+    type: String,
+    enum: ['active', 'inactive'],
+    default: 'active'
+  },
+  type: {
+    type: String,
+    enum: ['normal', 'home'],
+    default: 'normal'
+  },
+  externalCourseName: {
+    type: String
+  },
+  budget: {
+    type: String
+  },
+  duration: {
+    type: String
+  },
+  guardianContact: {
+    type: String
+  },
+  // External Course / Home Service Details
+  studentCount: { type: Number },
+  ageRange: { type: String },
+  address: { type: String },
+  phoneNumber: { type: String },
+  lessons: [ 
+    { 
+      title: {
+        type: String,
+        required: true
+      }, 
+      type: {
+        type: String,
+        enum: ['scheduled', 'video'],
+        required: true
+      },
+      mode: {
+        type: String,
+        enum: ['online', 'other'],
+      },
+      date: { type: Date },
+      time: { type: String },
+      location: { type: String },
+      meetingLink: { type: String },
+      accessCode: { type: String },
+      videoUrl: { type: String },
+      videoPath: { type: String }, // path for uploaded video
+      supportMaterial: { type: String }, // file path for PDF
+      status: {
+        type: String,
+        enum: ['scheduled', 'completed', 'cancelled'],
+        default: 'scheduled'
+      },
+      createdAt: { type: Date, default: Date.now },
+      createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' }
+    }
+  ],
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+// Indexes
+classroomSchema.index({ course: 1 });
+classroomSchema.index({ students: 1 });
+classroomSchema.index({ professor: 1 });
+classroomSchema.index({ status: 1 });
+classroomSchema.index({ type: 1 });
+
+module.exports = mongoose.model('Classroom', classroomSchema);
