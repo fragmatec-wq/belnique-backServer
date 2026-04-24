@@ -29,6 +29,8 @@ const userSchema = mongoose.Schema(
     phone: { type: String },
     gender: { type: String },
     birthDate: { type: Date },
+    experience: { type: String },
+    gostos: [{ type: String }],
     documentType: { type: String },
     documentNumber: { type: String },
     address: { type: String },

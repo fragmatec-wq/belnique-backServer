@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const User = require('../models/User');
 const logActivity = require('../utils/activityLogger');
 const sendEmail = require('../utils/sendEmail');
@@ -15,6 +17,16 @@ const Post = require('../models/Post');
 const Review = require('../models/Review');
 const Article = require('../models/Article');
 const Order = require('../models/Order');
+
+const logoPath = path.join(__dirname, '../src/logo.png');
+let logoDataUrl = '';
+
+try {
+  const logoBuffer = fs.readFileSync(logoPath);
+  logoDataUrl = `data:image/png;base64,${logoBuffer.toString('base64')}`;
+} catch (logoError) {
+  console.error('[UserController] Falha ao carregar logo para email:', logoError);
+}
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -99,6 +111,8 @@ const authGoogle = async (req, res) => {
             phone: user.phone,
             gender: user.gender,
             birthDate: user.birthDate,
+            experience: user.experience,
+            gostos: user.gostos,
             location: user.location,
             website: user.website,
             specialization: user.specialization,
@@ -195,6 +209,9 @@ const authUser = async (req, res) => {
       preferences: user.preferences,
       points: user.points,
       level: user.level,
+      interests: user.interests,
+      experience: user.experience,
+      gostos: user.gostos,
       token: generateToken(user._id),
       gend: {gender: user.gender},
     });
@@ -208,7 +225,7 @@ const authUser = async (req, res) => {
 // @access  Public
 const registerUser = async (req, res) => {
   try {
-    const { name, email, password, role, gender, birthDate, phone } = req.body;
+    const { name, email, password, role, gender, birthDate, phone, experience, gostos } = req.body;
 
     const userExists = await User.findOne({ email });
 
@@ -227,6 +244,8 @@ const registerUser = async (req, res) => {
       gender,
       birthDate,
       phone,
+      experience,
+      gostos,
       verificationToken,
       isVerified: false
     });
@@ -235,19 +254,58 @@ const registerUser = async (req, res) => {
       const origin = req.headers.origin;
       const baseClientUrl = process.env.CLIENT_URL || origin || 'https://ateliebelnique.vercel.app';
       const verificationUrl = `${baseClientUrl}/verify-email?token=${verificationToken}`;
+      const firstName = name ? name.split(' ')[0] : 'Artista';
+      
+      const emailHtml = `
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+          <head>
+            <meta charset="UTF-8" />
+            <title>Verifique seu email</title>
+          </head>
+          <body style="margin:0;padding:0;background:#f5f6fb;">
+            <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+              <tr>
+                <td align="center" style="padding: 20px 16px;">
+                  <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,0.08);margin:0 auto;">
+                    <tr>
+                      <td align="center" style="background: linear-gradient(135deg, #6D5BFF, #2A2A2A); padding: 28px 16px;">
+                        ${logoDataUrl ? `<img src="${logoDataUrl}" width="160" alt="Ateliê Belnique" style="display:block;border:0;outline:none;text-decoration:none;" />` : '<h2 style="color:#ffffff;margin:0;">Ateliê Belnique</h2>'}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding:32px 32px 24px;color:#333333;font-family:Arial, sans-serif;">
+                        <h1 style="margin:0 0 16px;font-size:26px;line-height:1.2;color:#111111;">Olá ${firstName}, seja bem-vindo(a)!</h1>
+                        <p style="margin:0 0 20px;font-size:16px;line-height:1.7;color:#555555;">
+                          Seu cadastro no Ateliê Belnique foi criado com sucesso. Para completar a ativação da sua conta, confirme seu e-mail clicando no botão abaixo.
+                        </p>
+                        <p style="margin:0 0 28px;text-align:center;">
+                          <a href="${verificationUrl}" style="display:inline-block;padding:14px 28px;border-radius:30px;background:#6D5BFF;color:#ffffff;text-decoration:none;font-weight:bold;">Confirmar meu e-mail</a>
+                        </p>
+                        <p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#777777;">Se o botão acima não funcionar, copie e cole o link abaixo no seu navegador:</p>
+                        <p style="margin:0 0 0;font-size:14px;line-height:1.6;color:#1a73e8;word-break:break-all;">${verificationUrl}</p>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="background:#f8f9ff;padding:24px 32px;font-size:14px;color:#777777;font-family:Arial, sans-serif;">
+                        <p style="margin:0 0 8px;">Se você não solicitou este cadastro, pode ignorar esta mensagem.</p>
+                        <p style="margin:0;">Ateliê Belnique — A arte de transformar talento em expressão.</p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </body>
+        </html>
+      `;
       
       try {
         await sendEmail({
           email: user.email,
           subject: 'Verifique seu email - Ateliê Belnique',
           message: `Por favor, verifique seu email clicando no link: ${verificationUrl}`,
-          html: `
-            <h1>Bem-vindo(a) à Ateliê Belnique!</h1>
-            <p>Por favor, verifique seu email clicando no botão abaixo:</p>
-            <a href="${verificationUrl}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Verificar Email</a>
-            <p>Ou copie e cole este link no seu navegador:</p>
-            <p>${verificationUrl}</p>
-          `
+          html: emailHtml
         });
       } catch (emailError) {
         console.error('Erro ao enviar email de verificação:', emailError);
@@ -270,6 +328,9 @@ const registerUser = async (req, res) => {
         avatar: user.profileImage,
         gender: user.gender,
         birthDate: user.birthDate,
+        phone: user.phone,
+        experience: user.experience,
+        gostos: user.gostos,
         preferences: user.preferences,
         message: 'Cadastro realizado com sucesso. Verifique seu email para ativar a conta.'
       });
@@ -297,6 +358,10 @@ const getUserProfile = async (req, res) => {
       secondaryRoles: user.secondaryRoles,
       bio: user.bio,
       phone: user.phone,
+      gender: user.gender,
+      birthDate: user.birthDate,
+      experience: user.experience,
+      gostos: user.gostos,
       location: user.location,
       website: user.website,
       specialization: user.specialization,
@@ -377,6 +442,8 @@ const updateUserProfile = async (req, res) => {
     
     if (req.body.gender) user.gender = req.body.gender;
     if (req.body.birthDate) user.birthDate = req.body.birthDate;
+    if (req.body.experience) user.experience = req.body.experience;
+    if (req.body.gostos) user.gostos = req.body.gostos;
 
     if (user.role === 'professor' && req.body.specialization) {
         user.specialization = req.body.specialization;
@@ -415,6 +482,10 @@ const updateUserProfile = async (req, res) => {
       website: updatedUser.website,
       specialization: updatedUser.specialization,
       avatar: updatedUser.profileImage,
+      gender: updatedUser.gender,
+      birthDate: updatedUser.birthDate,
+      experience: updatedUser.experience,
+      gostos: updatedUser.gostos,
       preferences: updatedUser.preferences,
       points: updatedUser.points,
       level: updatedUser.level,
@@ -852,6 +923,9 @@ const getUserById = async (req, res) => {
       bio: user.bio || '',
       profileImage: user.profileImage || null,
       gender: user.gender || null,
+      birthDate: user.birthDate || null,
+      experience: user.experience || null,
+      gostos: user.gostos || [],
       specialization: user.specialization || null,
       points: user.points || 0,
       level: user.level || 1,
@@ -922,6 +996,10 @@ const verifyEmail = async (req, res) => {
     role: user.role,
     bio: user.bio,
     phone: user.phone,
+    gender: user.gender,
+    birthDate: user.birthDate,
+    experience: user.experience,
+    gostos: user.gostos,
     location: user.location,
     website: user.website,
     specialization: user.specialization,
@@ -958,18 +1036,56 @@ const resendVerificationEmail = async (req, res) => {
     const baseClientUrl = process.env.CLIENT_URL || origin || 'https://ateliebelnique.vercel.app';
     const verificationUrl = `${baseClientUrl}/verify-email?token=${verificationToken}`;
 
+    const firstName = user.name ? user.name.split(' ')[0] : 'Artista';
+    const emailHtml = `
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+        <head>
+          <meta charset="UTF-8" />
+          <title>Reenvio de verificação</title>
+        </head>
+        <body style="margin:0;padding:0;background:#f5f6fb;">
+          <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+            <tr>
+              <td align="center" style="padding: 20px 16px;">
+                <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,0.08);margin:0 auto;">
+                  <tr>
+                    <td align="center" style="background: linear-gradient(135deg, #6D5BFF, #2A2A2A); padding: 28px 16px;">
+                      ${logoDataUrl ? `<img src="${logoDataUrl}" width="160" alt="Ateliê Belnique" style="display:block;border:0;outline:none;text-decoration:none;" />` : '<h2 style="color:#ffffff;margin:0;">Ateliê Belnique</h2>'}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:32px 32px 24px;color:#333333;font-family:Arial, sans-serif;">
+                      <h1 style="margin:0 0 16px;font-size:26px;line-height:1.2;color:#111111;">Olá ${firstName}, aqui está seu novo link</h1>
+                      <p style="margin:0 0 20px;font-size:16px;line-height:1.7;color:#555555;">
+                        Recebemos sua solicitação de reenvio do link de verificação. Clique no botão abaixo para confirmar seu email e ativar sua conta.
+                      </p>
+                      <p style="margin:0 0 28px;text-align:center;">
+                        <a href="${verificationUrl}" style="display:inline-block;padding:14px 28px;border-radius:30px;background:#6D5BFF;color:#ffffff;text-decoration:none;font-weight:bold;">Confirmar meu e-mail</a>
+                      </p>
+                      <p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#777777;">Se o botão não funcionar, copie e cole o link abaixo no navegador:</p>
+                      <p style="margin:0 0 0;font-size:14px;line-height:1.6;color:#1a73e8;word-break:break-all;">${verificationUrl}</p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="background:#f8f9ff;padding:24px 32px;font-size:14px;color:#777777;font-family:Arial, sans-serif;">
+                      <p style="margin:0 0 8px;">Se você não solicitou este email, ignore esta mensagem.</p>
+                      <p style="margin:0;">Ateliê Belnique — o seu espaço para aprender, criar e inspirar.</p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </body>
+      </html>
+    `;
+
     await sendEmail({
       email: user.email,
       subject: 'Reenvio: Verifique seu email - Ateliê Belnique',
       message: `Por favor, verifique seu email clicando no link: ${verificationUrl}`,
-      html: `
-        <h1>Bem-vindo(a) à Ateliê Belnique!</h1>
-        <p>Você solicitou um novo link de verificação.</p>
-        <p>Por favor, verifique seu email clicando no botão abaixo:</p>
-        <a href="${verificationUrl}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Verificar Email</a>
-        <p>Ou copie e cole este link no seu navegador:</p>
-        <p>${verificationUrl}</p>
-      `
+      html: emailHtml
     });
 
     res.json({ message: 'Email de verificação reenviado com sucesso' });
