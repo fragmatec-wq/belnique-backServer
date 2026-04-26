@@ -496,6 +496,51 @@ const updateUserProfile = async (req, res) => {
   }
 };
 
+// @desc    Update user preferences after first login
+// @route   PUT /api/users/update-preferences
+// @access  Private
+const updateUserPreferences = async (req, res) => {
+  const user = await User.findById(req.user._id);
+
+  if (user) {
+    if (req.body.interests) user.interests = req.body.interests;
+    if (req.body.experience) user.experience = req.body.experience;
+    if (req.body.gostos) user.gostos = req.body.gostos;
+
+    user.first_login = false;
+    user.IPs_User.push(req.ip);
+
+    const updatedUser = await user.save();
+
+    res.json({
+      _id: updatedUser._id,
+      name: updatedUser.name,
+      email: updatedUser.email,
+      role: updatedUser.role,
+      secondaryRoles: updatedUser.secondaryRoles,
+      bio: updatedUser.bio,
+      phone: updatedUser.phone,
+      location: updatedUser.location,
+      website: updatedUser.website,
+      specialization: updatedUser.specialization,
+      avatar: updatedUser.profileImage,
+      gender: updatedUser.gender,
+      birthDate: updatedUser.birthDate,
+      experience: updatedUser.experience,
+      gostos: updatedUser.gostos,
+      interests: updatedUser.interests,
+      preferences: updatedUser.preferences,
+      points: updatedUser.points,
+      level: updatedUser.level,
+      first_login: updatedUser.first_login,
+      IPs_User: updatedUser.IPs_User,
+      token: generateToken(updatedUser._id),
+    });
+  } else {
+    res.status(404).json({ message: 'User not found' });
+  }
+};
+
 const getDashboardStats = async (req, res) => {
   const user = req.user;
 
@@ -1394,6 +1439,8 @@ module.exports = {
   registerUser,
   getUserProfile,
   updateUserProfile,
+  updateUserPreferences,
+  updateUserPreferences,
   getDashboardStats,
   getUsers,
   getProfessorStudents,

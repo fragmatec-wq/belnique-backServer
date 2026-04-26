@@ -6,6 +6,7 @@ const {
   registerUser,
   getUserProfile,
   updateUserProfile,
+  updateUserPreferences,
   getDashboardStats,
   getUsers,
   getProfessorStudents,
@@ -47,7 +48,7 @@ router.post('/confirm-deletion', protect, confirmDeletion);
 router.get('/', protect, getUsers);
 router.get('/my-courses', protect, getStudentCourses);
 router.get('/home-details/:courseId', protect, getHomeDetails);
-router.put('/home-details/:courseId', protect, updateHomeDetails);
+router.put('/update-preferences', protect, updateUserPreferences);
 router.get('/dashboard-stats', protect, getDashboardStats);
 router.get('/gallery', protect, getMyGallery);
 router.get('/professor/students', protect, getProfessorStudents);

@@ -91,7 +91,9 @@ const userSchema = mongoose.Schema(
     
     // Status Logic
     isOnline: { type: Boolean, default: false },
-    lastActiveAt: { type: Date }
+    lastActiveAt: { type: Date },
+    first_login: { type: Boolean, default: true },
+    IPs_User: [{ type: String }]
   },
   { timestamps: true }
 );
