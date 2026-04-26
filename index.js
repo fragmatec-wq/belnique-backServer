@@ -539,6 +539,13 @@ io.on('connection', (socket) => {
     });
   });
 
+// backend nao conecta no mongodb Atlas as vezes, entao deixei o server rodando mesmo se tiver erro de conexao, para nao dar downtime total
+connectDB().catch(err => {
+  console.error('Erro ao conectar ao MongoDB Atlas:', err);
+  console.log('Continuando com o servidor rodando, mas sem conexão com o banco de dados.');
+});
+//
+
 server.listen(PORT, () => {
   console.log(`Backend ativo;`);
 });
