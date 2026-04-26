@@ -31,6 +31,7 @@ const userSchema = mongoose.Schema(
     birthDate: { type: Date },
     experience: { type: String },
     gostos: [{ type: String }],
+    interests: [{ type: String }],
     documentType: { type: String },
     documentNumber: { type: String },
     address: { type: String },

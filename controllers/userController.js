@@ -193,6 +193,13 @@ const authUser = async (req, res) => {
 
     console.log(`Género: ${user.gender} do usuário ${user.name}`); // Log do gênero do usuário
 
+    // Update IP list if it's a new IP
+    if (!user.IPs_User) user.IPs_User = [];
+    if (!user.IPs_User.includes(req.ip)) {
+      user.IPs_User.push(req.ip);
+      await user.save();
+    }
+
     res.json({
       _id: user._id,
       name: user.name,
@@ -212,8 +219,9 @@ const authUser = async (req, res) => {
       interests: user.interests,
       experience: user.experience,
       gostos: user.gostos,
+      birthDate: user.birthDate,
+      first_login: user.first_login,
       token: generateToken(user._id),
-      gend: {gender: user.gender},
     });
   } else {
     res.status(401).json({ message: 'E-mail ou palavra-passe Inválido!' });
@@ -225,12 +233,26 @@ const authUser = async (req, res) => {
 // @access  Public
 const registerUser = async (req, res) => {
   try {
-    const { name, email, password, role, gender, birthDate, phone, experience, gostos } = req.body;
+    const { 
+      name, 
+      email, 
+      password, 
+      role, 
+      gender, 
+      birthDate, 
+      phone, 
+      experience, 
+      gostos,
+      interests,
+      bio,
+      location,
+      website
+    } = req.body;
 
     const userExists = await User.findOne({ email });
 
     if (userExists) {
-      res.status(400).json({ message: 'User already exists' });
+      res.status(400).json({ message: 'O usuário já existe com este e-mail' });
       return;
     }
 
@@ -246,8 +268,14 @@ const registerUser = async (req, res) => {
       phone,
       experience,
       gostos,
+      interests,
+      bio,
+      location,
+      website,
       verificationToken,
-      isVerified: false
+      isVerified: false,
+      first_login: true,
+      IPs_User: [req.ip]
     });
 
     if (user) {
@@ -508,7 +536,11 @@ const updateUserPreferences = async (req, res) => {
     if (req.body.gostos) user.gostos = req.body.gostos;
 
     user.first_login = false;
-    user.IPs_User.push(req.ip);
+    
+    if (!user.IPs_User) user.IPs_User = [];
+    if (!user.IPs_User.includes(req.ip)) {
+      user.IPs_User.push(req.ip);
+    }
 
     const updatedUser = await user.save();
 
