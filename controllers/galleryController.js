@@ -136,7 +136,7 @@ exports.updateArtwork = async (req, res) => {
     // Check for status change and create notification
     if (approvalStatus && approvalStatus !== oldStatus) {
          if (approvalStatus === 'approved') {
-              await Notification.create({
+              const notif = await Notification.create({
                   user: updatedArtwork.artist,
                   title: 'Obra Aprovada',
                   message: `Sua obra "${updatedArtwork.title}" foi aprovada!`,
@@ -144,8 +144,9 @@ exports.updateArtwork = async (req, res) => {
                   relatedId: updatedArtwork._id,
                   link: '/galeria'
               });
+              if (req.io) req.io.to(updatedArtwork.artist.toString()).emit('notification recieved', notif);
          } else if (approvalStatus === 'rejected') {
-              await Notification.create({
+              const notif = await Notification.create({
                   user: updatedArtwork.artist,
                   title: 'Obra Rejeitada',
                   message: `Sua obra "${updatedArtwork.title}" foi rejeitada.`,
@@ -153,6 +154,7 @@ exports.updateArtwork = async (req, res) => {
                   relatedId: updatedArtwork._id,
                   link: '/galeria'
               });
+              if (req.io) req.io.to(updatedArtwork.artist.toString()).emit('notification recieved', notif);
          }
      }
     

@@ -32,6 +32,7 @@ const userSchema = mongoose.Schema(
     experience: { type: String },
     gostos: [{ type: String }],
     interests: [{ type: String }],
+    referralSource: { type: String },
     documentType: { type: String },
     documentNumber: { type: String },
     address: { type: String },

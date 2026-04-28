@@ -279,9 +279,13 @@ io.on('connection', (socket) => {
     socket.on("setup", (userData) => {
       if (userData && userData._id) {
         socket.join(userData._id);
-        socket.userData = userData; // Store user data on socket for disconnect handling
+        socket.userData = userData; // Store user data on socket
         
-        console.log(`User setup: ${userData.name} (${userData._id}) - Socket ID: ${socket.id}`);
+        // Mapping for calls
+        userSocketMap.set(userData._id, socket.id);
+        
+        console.log(`✓ User setup: ${userData.name} (${userData._id}) - Socket ID: ${socket.id}`);
+        console.log(`📊 Total users connected: ${userSocketMap.size}`);
 
         // Handle Online Status
         if (!onlineUsers.has(userData._id)) {
@@ -325,38 +329,10 @@ io.on('connection', (socket) => {
         if (participantId == newMessageRecieved.author._id) return;
 
         console.log("Socket: Emitting to", participantId);
-        socket.in(participantId).emit("message recieved", newMessageRecieved);
+        io.to(participantId).emit("message recieved", newMessageRecieved);
       });
     });
     // ------------------
-
-    // Call Management Handlers
-    socket.on('setup', (userData) => {
-      // Store the user data on the socket
-      socket.userData = userData;
-      
-      // Store the mapping from userId to socketId
-      userSocketMap.set(userData._id, socket.id);
-      
-      console.log('✓ User setup:', userData._id, 'Socket ID:', socket.id);
-      console.log('📊 Total users connected:', userSocketMap.size);
-
-      // Confirm setup to client
-      socket.emit('connected');
-
-      // Notify others that this user is online
-      if (onlineUsers.has(userData._id)) {
-        const userSockets = onlineUsers.get(userData._id);
-        userSockets.add(socket.id);
-      } else {
-        onlineUsers.set(userData._id, new Set([socket.id]));
-      }
-
-      // Emit online users list
-      const onlineUserIds = Array.from(onlineUsers.keys());
-      io.emit("online users list", onlineUserIds);
-      io.emit("user online", userData._id);
-    });
 
     socket.on('initiate-call', async ({ callId, professorId, classroomId, classroomName, isHomeService }) => {
       console.log('Call initiated:', callId, 'To professor:', professorId);

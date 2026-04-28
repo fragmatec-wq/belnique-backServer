@@ -73,7 +73,14 @@ exports.createEvent = async (req, res) => {
                 relatedId: savedEvent._id,
                 link: '/eventos'
             }));
-            await Notification.insertMany(notifications);
+            const createdNotifications = await Notification.insertMany(notifications);
+
+            // Emit via socket if io is available
+            if (req.io) {
+                createdNotifications.forEach(notif => {
+                    req.io.to(notif.user.toString()).emit('notification recieved', notif);
+                });
+            }
         }
     } catch (error) {
         console.error('Error creating event notifications:', error);

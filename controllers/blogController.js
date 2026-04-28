@@ -228,7 +228,7 @@ exports.updateArticle = async (req, res) => {
       .populate('comments.replies.user', 'name profileImage');
 
     if (status && status !== oldStatus && (status === 'published' || status === 'approved')) {
-          await Notification.create({
+          const newNotif = await Notification.create({
               user: updatedArticle.author,
               title: 'Artigo Publicado',
               message: `Seu artigo "${updatedArticle.title}" foi aprovado/publicado!`,
@@ -236,6 +236,10 @@ exports.updateArticle = async (req, res) => {
               relatedId: updatedArticle._id,
               link: '/blog'
           });
+
+          if (req.io) {
+            req.io.to(updatedArticle.author.toString()).emit('notification recieved', newNotif);
+          }
      }
 
     await logActivity({

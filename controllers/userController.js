@@ -359,6 +359,7 @@ const registerUser = async (req, res) => {
         phone: user.phone,
         experience: user.experience,
         gostos: user.gostos,
+        referralSource: user.referralSource,
         preferences: user.preferences,
         message: 'Cadastro realizado com sucesso. Verifique seu email para ativar a conta.'
       });
@@ -390,6 +391,7 @@ const getUserProfile = async (req, res) => {
       birthDate: user.birthDate,
       experience: user.experience,
       gostos: user.gostos,
+      referralSource: user.referralSource,
       location: user.location,
       website: user.website,
       specialization: user.specialization,
@@ -472,6 +474,7 @@ const updateUserProfile = async (req, res) => {
     if (req.body.birthDate) user.birthDate = req.body.birthDate;
     if (req.body.experience) user.experience = req.body.experience;
     if (req.body.gostos) user.gostos = req.body.gostos;
+    if (req.body.referralSource) user.referralSource = req.body.referralSource;
 
     if (user.role === 'professor' && req.body.specialization) {
         user.specialization = req.body.specialization;
@@ -514,6 +517,7 @@ const updateUserProfile = async (req, res) => {
       birthDate: updatedUser.birthDate,
       experience: updatedUser.experience,
       gostos: updatedUser.gostos,
+      referralSource: updatedUser.referralSource,
       preferences: updatedUser.preferences,
       points: updatedUser.points,
       level: updatedUser.level,
@@ -534,6 +538,7 @@ const updateUserPreferences = async (req, res) => {
     if (req.body.interests) user.interests = req.body.interests;
     if (req.body.experience) user.experience = req.body.experience;
     if (req.body.gostos) user.gostos = req.body.gostos;
+    if (req.body.referralSource) user.referralSource = req.body.referralSource;
 
     user.first_login = false;
     
@@ -561,6 +566,7 @@ const updateUserPreferences = async (req, res) => {
       experience: updatedUser.experience,
       gostos: updatedUser.gostos,
       interests: updatedUser.interests,
+      referralSource: updatedUser.referralSource,
       preferences: updatedUser.preferences,
       points: updatedUser.points,
       level: updatedUser.level,
