@@ -1165,17 +1165,24 @@ const resendVerificationEmail = async (req, res) => {
       </html>
     `;
 
-    await sendEmail({
-      email: user.email,
-      subject: 'Reenvio: Verifique seu email - Ateliê Belnique',
-      message: `Por favor, verifique seu email clicando no link: ${verificationUrl}`,
-      html: emailHtml
-    });
-
-    res.json({ message: 'Email de verificação reenviado com sucesso' });
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: 'Reenvio: Verifique seu email - Ateliê Belnique',
+        message: `Por favor, verifique seu email clicando no link: ${verificationUrl}`,
+        html: emailHtml
+      });
+      res.json({ message: 'Email de verificação reenviado com sucesso' });
+    } catch (emailError) {
+      console.error('Erro detalhado ao reenviar email:', emailError);
+      res.status(500).json({ 
+        message: emailError.message || 'Erro ao enviar email',
+        error: process.env.NODE_ENV === 'development' ? emailError.stack : undefined
+      });
+    }
   } catch (error) {
-    console.error('Erro ao reenviar email:', error);
-    res.status(500).json({ message: 'Erro ao enviar email' });
+    console.error('Erro geral no reenvio de email:', error);
+    res.status(500).json({ message: error.message || 'Erro interno no servidor' });
   }
 };
 

@@ -43,13 +43,25 @@ const sendEmail = async (options) => {
   };
 
   try {
+    console.log('[Email Service] Attempting to send email...');
+    console.log('[Email Service] Message details:', {
+      from: message.from,
+      to: message.to,
+      subject: message.subject
+    });
+    
     const info = await transporter.sendMail(message);
-    console.log('[Email Service] Message sent. ID: %s', info.messageId);
-    console.log("[Email Service] E-mail enviado com sucesso.");
+    console.log('[Email Service] Message sent successfully. ID: %s', info.messageId);
+    console.log('[Email Service] Response:', info.response);
     return info;
   } catch (error) {
-    console.error('[Email Service] Error sending email:', error);
-    console.error(`[Email Service] Falha ao enviar para ${options.email}. Motivo: ${error.message}`);
+    console.error('[Email Service] === ERROR DETAILS ===');
+    console.error('[Email Service] Error name:', error.name);
+    console.error('[Email Service] Error message:', error.message);
+    console.error('[Email Service] Error code:', error.code);
+    console.error('[Email Service] Error response:', error.response);
+    console.error('[Email Service] Error stack:', error.stack);
+    console.error('[Email Service] =====================');
     throw error;
   }
 };
