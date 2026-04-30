@@ -337,6 +337,8 @@ const registerUser = async (req, res) => {
         });
       } catch (emailError) {
         console.error('Erro ao enviar email de verificação:', emailError);
+        await User.findByIdAndDelete(user._id);
+        return res.status(500).json({ message: 'Erro ao enviar email de verificação. Tente novamente mais tarde.' });
       }
 
       logActivity({
