@@ -43,9 +43,6 @@ const sendEmail = async (options) => {
   };
 
   try {
-    await transporter.verify();
-    console.log('[Email Service] Transporter verified successfully.');
-
     const info = await transporter.sendMail(message);
     console.log('[Email Service] Message sent. ID: %s', info.messageId);
     console.log("[Email Service] E-mail enviado com sucesso.");
