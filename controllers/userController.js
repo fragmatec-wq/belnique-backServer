@@ -1100,7 +1100,7 @@ const verifyEmail = async (req, res) => {
 // @route   POST /api/users/resend-verification
 // @access  Public
 const resendVerificationEmail = async (req, res) => {
-  const { email } = req.body;
+  const { email } = req.body; 
 
   try {
     const user = await User.findOne({ email });
