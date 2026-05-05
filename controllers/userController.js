@@ -328,18 +328,6 @@ const registerUser = async (req, res) => {
         </html>
       `;
       
-      try {
-        await sendEmail({
-          email: user.email,
-          subject: 'Verifique seu email - Ateliê Belnique',
-          message: `Por favor, verifique seu email clicando no link: ${verificationUrl}`,
-          html: emailHtml
-        });
-      } catch (emailError) {
-        console.error('Erro ao enviar email de verificação:', emailError);
-        console.log('Usuário salvo no banco de dados, mas email não enviado. ID:', user._id);
-      }
-
       logActivity({
         user: user._id,
         action: 'USER_REGISTER',
@@ -363,6 +351,19 @@ const registerUser = async (req, res) => {
         referralSource: user.referralSource,
         preferences: user.preferences,
         message: 'Cadastro realizado com sucesso. Verifique seu email para ativar a conta.'
+      });
+      
+      // === SEND EMAIL IN BACKGROUND (AFTER RESPONDING!) ===
+      sendEmail({
+        email: user.email,
+        subject: 'Verifique seu email - Ateliê Belnique',
+        message: `Por favor, verifique seu email clicando no link: ${verificationUrl}`,
+        html: emailHtml
+      }).then(() => {
+        console.log('Email de verificação enviado com sucesso para:', user.email);
+      }).catch((emailError) => {
+        console.error('Erro ao enviar email de verificação (não bloqueou a resposta):', emailError);
+        console.log('Usuário salvo no banco de dados, mas email não enviado. ID:', user._id);
       });
     } else {
       res.status(400).json({ message: 'Invalid user data' });
